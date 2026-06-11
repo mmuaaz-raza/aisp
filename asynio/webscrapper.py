@@ -4,37 +4,44 @@ import time
 from urllib.parse import urlparse
 from typing import List
 import aiofiles
-import requests as req
 import asyncio
-
-async def fetchPage(url):
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None,req.get,url)
-    return response
+import aiohttp
+async def fetchPage(url,session:aiohttp.ClientSession):
+    try :
+        async with session.get(url,allow_redirects=False) as response:
+            html  = await response.text()
+            return {"url": url, "ok": True, "html": html}
+    except Exception as e:
+        return {"url": url,"ok":False , "error":str(e)}
         
 async def FetchAll(urls:List[str]):
-    requests = [fetchPage(x) for x in urls ]
-    
-    print(f"Fetcing requests {len(requests)}...")
-    responses = await asyncio.gather(*requests,return_exceptions=True)
-    i = 0
-    os.makedirs("media", exist_ok=True)
-    failed =[]
-    for res in responses:
-        if isinstance(res, BaseException):
-                failed.append(res)
-                continue
-        i+=1
-        if not res.ok:
-            failed.append(res.url)
-            continue
-            
-        hostname = urlparse(res.url).hostname or f"unknown_{i}" 
-        domain = hostname.removeprefix("www.").split(".")[0]
-        async with aiofiles.open(f"media/{domain}.html","w",encoding="utf-8") as f:
-            await f.write(res.text)
+    connector = aiohttp.TCPConnector(limit=100)
+    timeout = aiohttp.ClientTimeout(total=5)
+    failed = []
+    os.makedirs("media",exist_ok=True)
+    print("Fetching ...")
+    async with aiohttp.ClientSession(
+            connector=connector,
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0"}
+        ) as session:
+            tasks = [fetchPage(url, session) for url in urls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            count = 0
+            print("Storing to files ...")
+            for result in results : 
+                count +=1
+                if isinstance(result,BaseException):
+                    failed.append("NULL")
+                    continue
+                if not result["ok"]:
+                    failed.append(result["url"])
+                    continue
+                hostname = urlparse(result["url"]).hostname or f"unknown_{count}" 
+                domain = hostname.removeprefix("www.").split(".")[0]
+                async with aiofiles.open(f"media/{domain}.html","w",encoding="utf-8") as f:
+                    await f.write(result["html"])
     return failed
-
 
 async def main():
     urls = [
