@@ -42,17 +42,23 @@ def getAvgLen(corpus):
         total_len += len(doc.split(" "))
     return total_len/len(corpus)
 
-def LexicalSearch(query,corpus,avglen,k=5):
+def LexicalSearch(query,corpus,avglen):
     query = processText(query)
     response: List[tuple[int,float]] = [(0, 0) for _ in range(len(corpus))]
     idf_values = {word: idf(word, corpus) for word in query.split(" ")}
+    mini = 1e4 
+    maxi = 0
     for i,doc in enumerate(corpus):
         temp = 0
         for word in query.split(" "):
             idf_value = idf_values[word]
             doc = processText(doc)
             temp += score(doc,word,1.1,0.75,avglen)*idf_value
+        maxi = max(temp,maxi)
+        mini = min(mini,temp)
         response[i] = (i,temp)       
-    response.sort(key=lambda x:x[1],reverse=True)
-    return response[:k]
+    # min max normalization / min max scalling
+    response2 = [(i, (value - mini)/(maxi-mini)) for i,value in response]
+
+    return response2
 

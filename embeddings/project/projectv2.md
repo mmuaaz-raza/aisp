@@ -4,11 +4,11 @@
 Combine your existing dense (cosine similarity) search from Week 4 with sparse (BM25) search to build a hybrid retrieval system. Demonstrate that hybrid search outperforms either method alone on different query types.
 
 ## Core Requirements
-- [ ] Fix the BM25 implementation bugs: `avgLen` divisor, document length unit (word count not char count), case-sensitivity in `df`, consistent tokenization across `Tf`/`df`/`avgLen`
-- [ ] Implement `bm25_search(query, corpus)` that returns a single ranked score per document (sum of `idf(term) * tf_score(term, doc)` across all query terms)
-- [ ] Reuse your Week 4 dense search (`search()`) — no changes needed, just call it alongside BM25
-- [ ] Implement dynamic min-max normalization for both score arrays, computed per query (not a fixed constant)
-- [ ] Implement `hybrid_search(query, alpha)` that combines normalized dense + normalized sparse scores using `alpha * dense_norm + (1-alpha) * sparse_norm`
+- [x] Fix the BM25 implementation bugs: `avgLen` divisor, document length unit (word count not char count), case-sensitivity in `df`, consistent tokenization across `Tf`/`df`/`avgLen`
+- [x] Implement `bm25_search(query, corpus)` that returns a single ranked score per document (sum of `idf(term) * tf_score(term, doc)` across all query terms)
+- [x] Reuse your Week 4 dense search (`search()`) — no changes needed, just call it alongside BM25
+- [x] Implement dynamic min-max normalization for both score arrays, computed per query (not a fixed constant)
+- [x] Implement `hybrid_search(query, alpha)` that combines normalized dense + normalized sparse scores using `alpha * dense_norm + (1-alpha) * sparse_norm`
 
 ## Comparison Requirements
 - [ ] Run the same query through three functions: pure dense, pure BM25, hybrid — print all three result sets side by side

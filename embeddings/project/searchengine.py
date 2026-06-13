@@ -1,5 +1,5 @@
 import asyncio
-from typing import  Dict , Any
+from typing import  List, Dict , Any
 from semantical_search.main import Embbed , initTransformer, initEmbeddings,SemanticSearch
 from bm25.main import LexicalSearch,getAvgLen
 import time
@@ -23,7 +23,15 @@ async def load_data():
         return corpus    
 
 
+def hybridSearch(semantic_results,lexical_results,alpha=0.5,k=5):
+    results: List[tuple[int,float]] = [(0, 0) for _ in range(len(semantic_results))]
 
+    for i , lr in lexical_results :
+        results[i] = (i,alpha*lr+ (1-alpha)*semantic_results[i][1])
+
+    results.sort(key=lambda x:x[1],reverse=True)
+
+    return results[:k]
 
 async def main():
     cache:Dict[str,Any] ={}
@@ -49,12 +57,12 @@ async def main():
                         print("Embedding issue , can't proceed")
                         continue
                     
-                    results_s = SemanticSearch(embeddings,target_embedding[0],3)
-                    results_l = LexicalSearch(query,data,avglen,3)
-                    print(results_s)
-                    print(results_l)
-
-                    # cache[query.lower()] = results
+                    results_s = SemanticSearch(embeddings,target_embedding[0])
+                    results_l = LexicalSearch(query,data,avglen)
+                    results = hybridSearch(results_s,results_l,0.5,5)
+                    cache[query.lower()] = results
+            for i,res in results:
+                print(i, "|",res ,"|",data[i])                    
 
         return 0
     except Exception as e:

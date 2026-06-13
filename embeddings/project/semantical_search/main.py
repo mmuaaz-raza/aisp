@@ -45,10 +45,9 @@ def loadEmbeddings() :
 
     
     
-def SemanticSearch(embeddings, target_embedding,k=5):
+def SemanticSearch(embeddings, target_embedding,):
     scores =  np.dot(embeddings,target_embedding) / (np.linalg.norm(embeddings,axis=1) * np.linalg.norm(target_embedding))
-    top_k = np.argsort(scores)[::-1][:k]
-    return [(i, scores[i]) for i in top_k]
+    return [(i, score) for i,score in enumerate(scores)]
 
 # def searchManual(embeddings, target_embedding):
 #     dots = len(embeddings) * [0]
