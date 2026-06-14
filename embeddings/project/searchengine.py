@@ -1,7 +1,7 @@
 import asyncio
 from typing import  List, Dict , Any
 from semantical_search.main import Embbed , initTransformer, initEmbeddings,SemanticSearch
-from bm25.main import LexicalSearch,getAvgLen
+from bm25.main import LexicalSearch,getAvgLen,build_df_table
 import time
 import os
 import aiofiles
@@ -44,11 +44,11 @@ async def main():
         transformer = initTransformer()
         embeddings = initEmbeddings(data,transformer)
         avglen = getAvgLen(data)
+        df_table = build_df_table(data)
         os.system('clear')
     
         while(True) :
             query = await asyncio.to_thread(input, "Query : ")
-            st = time.perf_counter()
             results = None
             if(query.strip() == 'x'):
                 break
@@ -66,7 +66,7 @@ async def main():
                         print(i, "|",res ,"|",data[i])
                     print({f"time taken by semantic search : {time.perf_counter()-sti}"})
                     sti2 = time.perf_counter()
-                    results_l = LexicalSearch(query,data,avglen)
+                    results_l = LexicalSearch(query,data,avglen,df_table)
                     for i,res in pureSearch(results_l):
                         print(i, "|",res ,"|",data[i])
                     print({f"time taken by Lexical search : {time.perf_counter()-sti2}"})
