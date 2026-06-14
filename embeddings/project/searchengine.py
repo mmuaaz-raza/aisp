@@ -33,6 +33,10 @@ def hybridSearch(semantic_results,lexical_results,alpha=0.5,k=5):
 
     return results[:k]
 
+def pureSearch(result:List[tuple[int,float]],k=3):
+    result.sort(key=lambda x:x[1],reverse=True)
+    return result[:k]
+
 async def main():
     cache:Dict[str,Any] ={}
     try:
@@ -56,13 +60,23 @@ async def main():
                     if target_embedding is None:
                         print("Embedding issue , can't proceed")
                         continue
-                    
+                    sti = time.perf_counter()
                     results_s = SemanticSearch(embeddings,target_embedding[0])
+                    for i,res in pureSearch(results_s):
+                        print(i, "|",res ,"|",data[i])
+                    print({f"time taken by semantic search : {time.perf_counter()-sti}"})
+                    sti2 = time.perf_counter()
                     results_l = LexicalSearch(query,data,avglen)
-                    results = hybridSearch(results_s,results_l,0.5,5)
+                    for i,res in pureSearch(results_l):
+                        print(i, "|",res ,"|",data[i])
+                    print({f"time taken by Lexical search : {time.perf_counter()-sti2}"})
+                    results = hybridSearch(results_s,results_l,0.5,3)
+                    for i,res in results:
+                        print(i, "|",res ,"|",data[i])
+
+                    print({f"time taken by Hybrid search : {time.perf_counter()-sti}"})
                     cache[query.lower()] = results
-            for i,res in results:
-                print(i, "|",res ,"|",data[i])                    
+                                
 
         return 0
     except Exception as e:

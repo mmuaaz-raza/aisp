@@ -49,16 +49,19 @@ def LexicalSearch(query,corpus,avglen):
     mini = 1e4 
     maxi = 0
     for i,doc in enumerate(corpus):
+        doc = processText(doc)
         temp = 0
         for word in query.split(" "):
             idf_value = idf_values[word]
-            doc = processText(doc)
             temp += score(doc,word,1.1,0.75,avglen)*idf_value
         maxi = max(temp,maxi)
         mini = min(mini,temp)
         response[i] = (i,temp)       
-    # min max normalization / min max scalling
-    response2 = [(i, (value - mini)/(maxi-mini)) for i,value in response]
 
-    return response2
+    # log scaling
+    if(mini == maxi) :
+        return [(i,math.log(1+res)) for i,res in response ]
+    
+    # min max scaling
+    return [(i, (value - mini)/(maxi-mini)) for i,value in response]
 

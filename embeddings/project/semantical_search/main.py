@@ -46,7 +46,7 @@ def loadEmbeddings() :
     
     
 def SemanticSearch(embeddings, target_embedding,):
-    scores =  np.dot(embeddings,target_embedding) / (np.linalg.norm(embeddings,axis=1) * np.linalg.norm(target_embedding))
+    scores =  np.dot(embeddings,target_embedding) / (np.linalg.norm(embeddings,axis=1) * np.linalg.norm(target_embedding,axis=None))
     return [(i, score) for i,score in enumerate(scores)]
 
 # def searchManual(embeddings, target_embedding):
