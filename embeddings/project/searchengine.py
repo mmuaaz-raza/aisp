@@ -1,8 +1,9 @@
 import asyncio
+from llm.main import Respond
+from crossEncoder.main import initEncoder,CrossEncode
 from typing import  List, Dict , Any
 from semantical_search.main import Embbed , initTransformer, initEmbeddings,SemanticSearch
 from bm25.main import LexicalSearch,getAvgLen,build_df_table
-import time
 import os
 import aiofiles
 import json 
@@ -41,6 +42,7 @@ async def main():
     cache:Dict[str,Any] ={}
     try:
         data= await load_data()
+        encoder = initEncoder()
         transformer = initTransformer()
         embeddings = initEmbeddings(data,transformer)
         avglen = getAvgLen(data)
@@ -52,33 +54,21 @@ async def main():
             results = None
             if(query.strip() == 'x'):
                 break
-            if query.lower() in cache:
+            elif query.lower() in cache:
                 results = cache[query.lower()]
-
             else:  
                     target_embedding = Embbed([query],transformer)
                     if target_embedding is None:
                         print("Embedding issue , can't proceed")
                         continue
-                    sti = time.perf_counter()
                     results_s = SemanticSearch(embeddings,target_embedding[0])
-                    for i,res in pureSearch(results_s):
-                        print(i, "|",res ,"|",data[i])
-                    print({f"time taken by semantic search : {time.perf_counter()-sti}"})
-                    sti2 = time.perf_counter()
                     results_l = LexicalSearch(query,data,avglen,df_table)
-                    for i,res in pureSearch(results_l):
-                        print(i, "|",res ,"|",data[i])
-                    print({f"time taken by Lexical search : {time.perf_counter()-sti2}"})
-                    results = hybridSearch(results_s,results_l,0.5,3)
-                    for i,res in results:
-                        print(i, "|",res ,"|",data[i])
+                    results = hybridSearch(results_s,results_l,0.2,10)
+                    results = CrossEncode(encoder,[(data[i],i) for i,_ in results],query)
+                    response = Respond(query,[data[i] for i,_ in results])
+                    print(f"---------RESULT---------\n{response}")
+                    cache[query.lower()] = response
 
-                    print({f"time taken by Hybrid search : {time.perf_counter()-sti}"})
-                    cache[query.lower()] = results
-                                
-
-        return 0
     except Exception as e:
         print(e)
     
