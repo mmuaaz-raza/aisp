@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from scripts.ingestion import saveChunks
+from groq import Groq
 from chonkie import SemanticChunker
 from sentence_transformers import SentenceTransformer
 from fastapi import FastAPI
@@ -12,17 +13,14 @@ from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
 models = {}
-qd_client = None
 @asynccontextmanager
 async def setup(app: FastAPI):
     load_dotenv()
     client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
-    global qd_client
-
     try:
-        qd_client = AsyncQdrantClient(url="http://localhost:6333")
-        if not await qd_client.collection_exists("books"):
-            await qd_client.create_collection(
+        models["qd_client"] = AsyncQdrantClient(url="http://localhost:6333")
+        if not await models["qd_client"].collection_exists("books"):
+            await models["qd_client"].create_collection(
                 collection_name="books",
                 vectors_config={
                     "dense":VectorParams(
@@ -36,6 +34,7 @@ async def setup(app: FastAPI):
                 on_disk_payload=True,
             )
         print("Qdrant setup has been completed")
+
         models["chunker"] = SemanticChunker( 
         embedding_model="minishlab/potion-base-32M",       
         threshold=0.4,
@@ -55,14 +54,21 @@ async def setup(app: FastAPI):
         await init_beanie(database=db, document_models=[Doc])
         print("Connected to MongoDB successfully!")
 
-        await saveChunks(models,qd_client)
+        models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY") )
     except Exception as e:
         print(f"unexpected error occured : {e}")
+        raise e
         
-            
+
+
     yield 
 
-    models.clear()
     await client.close()
-    if qd_client :
-        await qd_client.close()
+
+    if "llm" in models :
+        models["llm"].close()
+
+    if "qd_client" in models :
+        await models["qd_client"].close() 
+
+    models.clear()

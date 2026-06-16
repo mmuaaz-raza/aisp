@@ -11,7 +11,7 @@ class BookUrl(BaseModel):
 async def DownloadContent(body:BookUrl)->bool:
     try :
         doc = await Doc.find_one(Doc.index==str(body.url))
-
+        
         if doc: 
             return True
         lib = GutenBurg()
