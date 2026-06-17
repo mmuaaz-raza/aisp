@@ -4,11 +4,11 @@ from models.document import Doc
 from typing import Annotated ,List
 from beanie import PydanticObjectId
 import re
-router = APIRouter(prefix="/docs")
+router = APIRouter(prefix="/books")
 
 
 @router.get("")
-async def listAllBooks(name:Annotated[str,Query()]="",tags:Annotated[List[str],Query()]=[]):
+async def listAllBooks(name:Annotated[str,Query()]="",tags:Annotated[List[str],Query()]=[],page:Annotated[int,Query()]=0):
     filters = {}
     if name :
         words = name.split(" ")
@@ -16,8 +16,9 @@ async def listAllBooks(name:Annotated[str,Query()]="",tags:Annotated[List[str],Q
         filters["title"] = {"$regex": regex_pattern, "$options": "i"}
     if tags : 
         filters["tags"] = tags
-
-    docs =await Doc.find(Doc.is_embedded==True,filters).to_list()
+    
+    perPage=30
+    docs =await Doc.find(Doc.is_embedded==True,filters).skip(page*perPage).limit(perPage).to_list()
     return JSONResponse(status_code=status.HTTP_200_OK,content=[doc.model_dump(mode="json",exclude={"content","is_embedded"} )for doc in docs])
 
 

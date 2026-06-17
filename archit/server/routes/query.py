@@ -14,7 +14,7 @@ class SearchRequest(BaseModel):
     ids : List[PydanticObjectId] = []
     query : str
 
-class RelevantDocumets():
+class RelevantDocumets(BaseModel):
     token : int
     text: str
     title : str
@@ -28,35 +28,45 @@ def generatePrompt(query:str,documents:List[RelevantDocumets]):
         context_text += f"Content: {e.text}\n"
         context_text += f"Tokens (current chunk): {str(e.token)}\n"
 
-    prompt = f"""You are an expert philosophical researcher and analytical thinker. Your task is to analyze excerpts from a philosophy book to identify, extract, and synthesize complex and abstract philosophical questions related to the user's query.
+    prompt = f"""
+    You are a philosophical research assistant. Answer the user's query using the excerpts below as your primary source material.
 
     <context>
     {context_text}
     </context>
 
-    User Query: {query}
+    Query: {query}
 
-    Instructions:
-    1. Deep Analysis: Read the <context> to find both explicit questions and implicit philosophical dilemmas, paradoxes, or core abstract inquiries (e.g., questions regarding existence, ethics, knowledge, consciousness, or meaning).
-    2. Synthesis & Explanation: Do not just list quotes. Summarize the underlying philosophical questions the text is wrestling with. Explain *why* these questions are complex and what abstract concepts they touch upon.
-    3. Strict Grounding: Base your analysis purely on the provided <context>. Do not introduce outside philosophical theories or authors unless they are explicitly mentioned in the text.
-    4. Mandatory Citation: You must cite the specific text supporting your analysis using the inline format [Source ID: abc]. Every major claim or extracted question must be cited.
-    5. Missing Context: If the provided excerpts do not contain complex or abstract philosophical questions related to the user's query, you must explicitly state: "The provided text excerpts do not contain abstract philosophical questions relevant to this query." Do not invent or hallucinate philosophical depth that is not present in the text.
-    
+    Rules:
+    - Answer the query directly and substantively in your own words, drawing on the provided excerpts
+    - Synthesize information across sources into a coherent argument — do not summarize each source separately
+    - Paraphrase all source material; never reproduce direct quotes from the text
+    - Ground your answer strictly in the provided context; do not introduce outside claims, theories, or figures unless explicitly mentioned in the excerpts
+    - Cite every major claim inline as [Source: title of book/document]
+    - Use clear Markdown headings to organize the response; keep each section focused and non-redundant
+    - Each section must add new insight — do not restate what a previous section already covered
+    - End your response when the answer is complete; do not add a summary or conclusion that repeats prior content
+    - If the excerpts contain no information relevant to the query, state exactly: "The provided excerpts do not contain sufficient information to answer this query."
 
-    ANSWER : 
+    ANSWER:
     """
 
+    return prompt
 @router.post("/")
 async def SearchBook(req:SearchRequest):
     filters = {}
+    docs_v = {}
     if req.ids:
         filters["_id"]= {"$in":req.ids}
     docs =await Doc.find(Doc.is_embedded==True,filters).to_list()
     if not docs:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND,content={"message":"no document to find"})
     
-    extracted_ids = [str(doc.id) for doc in docs]
+    extracted_ids = []
+    for doc in docs:
+        extracted_ids.append(str(doc.id))
+        docs_v[str(doc.id)] = doc.title
+        
     embedded_query = models["embedder"].encode(req.query)
     if not models["qd_client"]:
         print(models["qd_client"])
@@ -77,27 +87,15 @@ async def SearchBook(req:SearchRequest):
     ),limit=5)
     matched_documents = search_results.points
     Response = []
-    docs_v = {}
+
     for point in matched_documents:
-        doc_id = point.id
-        similarity_score = point.score
-    
-        metadata = point.payload 
-    
-        m_id = metadata.get("m_id", "N/A")
-        if m_id not in docs_v:
-            doc = await Doc.get(PydanticObjectId)
-            if not doc :
-                docs_v[m_id] = ""    
-            else:
-                docs_v[m_id] = doc.title 
-        
-        Response.append({"text":point.text,"title":docs_v[m_id],"token":point.token_count})
+        m_id = str(point.payload.get("m_id", "N/A"))
+        Response.append(RelevantDocumets(text=point.payload["text"],title=docs_v.get(m_id,"Unknown"),token=point.payload["token_count"]))
 
     
     
     response = models["llm"].chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": "You are a meticulous academic assistant specializing in philosophical analysis. You strictly follow instructions and rely only on provided texts."},
             {"role": "user", "content": generatePrompt(req.query,Response)}
@@ -105,4 +103,5 @@ async def SearchBook(req:SearchRequest):
         temperature=0.3
     )
 
-    return JSONResponse(status_code=status.HTTP_200_OK,content=response.choices[0].message.content)
+    return JSONResponse(status_code=status.HTTP_200_OK,content={"response":response.choices[0].message.content})
+

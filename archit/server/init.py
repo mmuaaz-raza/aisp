@@ -9,6 +9,7 @@ from beanie import init_beanie
 from fastapi import FastAPI
 from pymongo import AsyncMongoClient
 from models.document import Doc
+from models.chat import Chat
 from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
@@ -51,7 +52,7 @@ async def setup(app: FastAPI):
         await client["archit"].command("ping")
         db = client["archit"]
 
-        await init_beanie(database=db, document_models=[Doc])
+        await init_beanie(database=db, document_models=[Doc,Chat])
         print("Connected to MongoDB successfully!")
 
         models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY") )
