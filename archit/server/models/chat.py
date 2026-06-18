@@ -10,6 +10,7 @@ class Chat(Document):
     title:str = Field(...,max_length=100,min_length=10)
     userId : PydanticObjectId 
     messages : List[Message] = []
+    summary:str = ""
     is_exhausted : bool = False    
 
 

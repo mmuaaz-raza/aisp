@@ -3,6 +3,7 @@ from init import setup
 from routes import docs
 from routes import query
 from routes import chat
+from routes import auth
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(lifespan=setup)
@@ -18,6 +19,7 @@ app.add_middleware(
 
 app.include_router(query.router,prefix="/api/v1")
 app.include_router(docs.router ,prefix="/api/v1")
+app.include_router(auth.router ,prefix="/api/v1")
 app.include_router(chat.router ,prefix="/api/v1")
 
 

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from scripts.ingestion import saveChunks
 from groq import Groq
 from chonkie import SemanticChunker
+from models.user import User
 from sentence_transformers import SentenceTransformer
 from fastapi import FastAPI
 import os
@@ -52,7 +53,7 @@ async def setup(app: FastAPI):
         await client["archit"].command("ping")
         db = client["archit"]
 
-        await init_beanie(database=db, document_models=[Doc,Chat])
+        await init_beanie(database=db, document_models=[Doc,Chat,User])
         print("Connected to MongoDB successfully!")
 
         models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY") )

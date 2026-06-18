@@ -5,6 +5,8 @@ import { Message, Book, ChatSession, ChatRequest } from "@/lib/types";
 import Sidebar from "@/components/Sidebar";
 import ChatArea from "@/components/ChatArea";
 import BookPickerModal from "@/components/BookPickerModal";
+import LoginModal from "@/components/LoginModal";
+import { useAuth } from "@/lib/useAuth";
 
 const STORAGE_KEY = "archit_chat_sessions";
 
@@ -30,6 +32,8 @@ function newSession(selectedBookIds: string[] = []): ChatSession {
 }
 
 export default function ChatPage() {
+  const auth = useAuth();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
@@ -258,6 +262,10 @@ export default function ChatPage() {
         onDeleteSession={handleDeleteSession}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+        isLoggedIn={auth.isLoggedIn}
+        authUser={auth.user}
+        onLoginClick={() => setLoginModalOpen(true)}
+        onLogout={auth.logout}
       />
 
       <ChatArea
@@ -280,6 +288,12 @@ export default function ChatPage() {
         selectedIds={activeSession?.selectedBookIds ?? []}
         onToggleBook={handleToggleBook}
         onBooksLoaded={registerBooks}
+      />
+
+      <LoginModal
+        open={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        auth={auth}
       />
     </div>
   );
