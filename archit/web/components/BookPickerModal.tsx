@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Book } from "@/lib/types";
 import BookCard from "./BookCard";
-import { X, Search, BookOpen, Check, ChevronDown, Loader2 } from "lucide-react";
+import { X, Search, BookOpen, Check, ChevronDown, Loader2, Tag } from "lucide-react";
 
-const BACKEND = "http://localhost:8000/api/v1";
 const PAGE_LIMIT = 20;
 
 interface BookPickerModalProps {
@@ -27,81 +26,46 @@ export default function BookPickerModal({
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Search input value (shown immediately)
   const [query, setQuery] = useState("");
-  // Debounced value sent to server
-  const [serverQuery, setServerQuery] = useState("");
-
-  const [page, setPage] = useState(0); // 0-indexed (matches Python backend)
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
   const searchRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serverFilteredRef = useRef(false);
 
-  // ── Debounce: reset to page 1 when query changes ─────────────────────────
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setServerQuery(query);
-      setPage(0); // reset to first page on new query
-    }, 350);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
-
-  // ── Fetch from server whenever open, serverQuery, or page changes ─────────
-  const fetchBooks = useCallback(
-    async (q: string, p: number, isNewQuery: boolean) => {
+  // ── Core fetch (append=true for load-more, false = replace) ───────────────
+  const doFetch = useCallback(
+    async (q: string, tags: string[], p: number, append: boolean) => {
+      append ? setLoadingMore(true) : setLoading(true);
+      setError(null);
       try {
-        if (isNewQuery) {
-          setLoading(true);
-          setError(null);
-        } else {
-          setLoadingMore(true);
-        }
-
-        // Build query params matching Python signature:
-        // name: str = "", tags: List[str] = [], page: int = 0
         const params = new URLSearchParams({ page: String(p) });
         if (q.trim()) params.set("name", q.trim());
-        // tags param omitted here — handled via server default (empty list)
+        tags.forEach((t) => params.append("tags", t));
 
-        const res = await fetch(`${BACKEND}/books?${params}`);
+        const res = await fetch(`/api/v1/books?${params}`, {
+          credentials: "include",
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        // Accept: Book[] OR { books, has_more, total, pages } OR { items, … }
-        const list: Book[] = Array.isArray(data)
-          ? data
-          : data.books ?? data.items ?? [];
+        const list: Book[] = data.books ?? [];
+        const ftotal: number = data.ftotal ?? list.length;
+        const tot: number = data.total ?? 0;
 
-        // Detect if there are more pages
-        const more: boolean =
-          data.has_more ??
-          data.hasMore ??
-          (typeof data.total === "number"
-            ? (p + 1) * PAGE_LIMIT < data.total
-            : list.length === PAGE_LIMIT);
+        const more = p * PAGE_LIMIT + ftotal < tot;
 
-        const tot: number =
-          data.total ??
-          data.count ??
-          (more ? (p + 1) * PAGE_LIMIT + 1 : (p + 1) * PAGE_LIMIT);
-
-        if (isNewQuery) {
-          setBooks(list);
-        } else {
-          setBooks((prev) => [...prev, ...list]);
-        }
-
+        setBooks((prev) => (append ? [...prev, ...list] : list));
         setHasMore(more);
         setTotal(tot);
+        setPage(p);
         onBooksLoaded?.(list);
       } catch {
-        if (isNewQuery) setError("Could not load books. Is the backend running?");
+        if (!append) setError("Could not load books. Is the backend running?");
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -110,26 +74,100 @@ export default function BookPickerModal({
     [onBooksLoaded]
   );
 
-  // Trigger fetch on open + when serverQuery/page change
+  // ── On modal open: fetch tags + initial books ────────────────────────────
   useEffect(() => {
     if (!open) return;
-    fetchBooks(serverQuery, page, page === 1);
-  }, [open, serverQuery, page, fetchBooks]);
+    setTimeout(() => searchRef.current?.focus(), 80);
+    // Fetch all available tags
+    fetch("/api/v1/books/tags", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { tags: [] }))
+      .then((data) => {
+        const tagsArray = Array.isArray(data?.tags) ? data.tags : Array.isArray(data) ? data : [];
+        setAvailableTags(tagsArray.sort());
+      })
+      .catch(() => setAvailableTags([]));
+    // Fetch first page of books
+    doFetch("", [], 0, false);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Focus search + reset on open/close
+  // ── Reset on close ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (open) {
-      setTimeout(() => searchRef.current?.focus(), 80);
-    } else {
+    if (!open) {
       setQuery("");
-      setServerQuery("");
-      setPage(0); // reset to 0-indexed first page
+      setSelectedTags([]);
       setBooks([]);
+      setAvailableTags([]);
+      setPage(0);
       setHasMore(false);
+      setError(null);
+      serverFilteredRef.current = false;
     }
   }, [open]);
 
-  // Close on Escape
+  // ── Local filter (derived, instant) ──────────────────────────────────────
+  const displayBooks = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q && selectedTags.length === 0) return books;
+    return books.filter((b) => {
+      const matchesName = !q || b.title.toLowerCase().includes(q);
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.every((t) => b.tags.includes(t));
+      return matchesName && matchesTags;
+    });
+  }, [books, query, selectedTags]);
+
+  // ── Server fallback: only when local filter returns nothing ───────────────
+  useEffect(() => {
+    if (!open) return;
+    if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+
+    const hasFilter = query.trim() !== "" || selectedTags.length > 0;
+    if (!hasFilter) {
+      if (serverFilteredRef.current) {
+        serverFilteredRef.current = false;
+        doFetch("", [], 0, false);
+      }
+      return; 
+    }
+
+    const q = query.trim().toLowerCase();
+    const localHits = books.filter((b) => {
+      const matchesName = !q || b.title.toLowerCase().includes(q);
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.every((t) => b.tags.includes(t));
+      return matchesName && matchesTags;
+    });
+
+    if (localHits.length === 0) {
+      // Local search came up empty — ask the server (debounced, REPLACE books)
+      fallbackTimer.current = setTimeout(() => {
+        serverFilteredRef.current = true;
+        doFetch(query, selectedTags, 0, false);
+      }, 350);
+    }
+
+    return () => {
+      if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+    };
+  }, [query, selectedTags, open]); // intentionally excludes `books` to avoid loops
+
+  // ── Available tags from dedicated endpoint (set on open) ─────────────────
+
+  const toggleTag = (tag: string) =>
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+
+  // ── Load more (always appends) ────────────────────────────────────────────
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      doFetch(query, selectedTags, page + 1, true);
+    }
+  };
+
+  // ── Escape to close ───────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape" && open) onClose();
@@ -137,10 +175,6 @@ export default function BookPickerModal({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
-
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMore) setPage((p) => p + 1); // next 0-indexed page
-  };
 
   if (!open) return null;
 
@@ -153,14 +187,11 @@ export default function BookPickerModal({
         onClick={onClose}
       />
 
-      {/* Panel — large centered dialog */}
+      {/* Panel */}
       <div className="fixed inset-4 z-50 flex items-center justify-center">
         <div
           className="w-full max-w-5xl h-full max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
-          style={{
-            background: "var(--surface)",
-            borderColor: "var(--border)",
-          }}
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         >
           {/* Header */}
           <div
@@ -180,10 +211,7 @@ export default function BookPickerModal({
               {selectedIds.length > 0 && (
                 <span
                   className="text-[10px] rounded-full px-2 py-0.5 font-semibold"
-                  style={{
-                    background: "var(--accent)",
-                    color: "var(--user-bubble-text)",
-                  }}
+                  style={{ background: "var(--accent)", color: "var(--user-bubble-text)" }}
                 >
                   {selectedIds.length} selected
                 </span>
@@ -207,11 +235,12 @@ export default function BookPickerModal({
             </div>
           </div>
 
-          {/* Search — sends to server */}
+          {/* Search + Tag filters */}
           <div
-            className="px-5 py-3 border-b shrink-0"
+            className="px-5 py-3 border-b shrink-0 flex flex-col gap-2.5"
             style={{ borderColor: "var(--border)" }}
           >
+            {/* Text search */}
             <div className="relative">
               {loading && query ? (
                 <Loader2
@@ -227,7 +256,7 @@ export default function BookPickerModal({
               <input
                 ref={searchRef}
                 type="text"
-                placeholder="Search by title or tag…"
+                placeholder="Search by title…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full text-sm pl-9 pr-4 py-2.5 rounded-xl focus:outline-none transition-shadow"
@@ -254,31 +283,62 @@ export default function BookPickerModal({
                 </button>
               )}
             </div>
+
+            {/* Tag chips */}
+            {availableTags.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Tag size={11} className="text-[var(--text-muted)] shrink-0" />
+                {availableTags.map((tag) => {
+                  const active = selectedTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className="text-[11px] px-2 py-0.5 rounded-full border transition-all cursor-pointer"
+                      style={
+                        active
+                          ? {
+                              background: "var(--accent)",
+                              color: "var(--user-bubble-text)",
+                              borderColor: "var(--accent)",
+                            }
+                          : {
+                              background: "transparent",
+                              color: "var(--text-muted)",
+                              borderColor: "var(--border)",
+                            }
+                      }
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={() => setSelectedTags([])}
+                    className="text-[11px] text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer ml-1"
+                  >
+                    clear tags
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Book grid — flex-1 scrollable */}
+          {/* Book grid */}
           <div className="flex-1 overflow-y-auto p-5">
-            {/* Initial loading skeleton */}
-            {loading && books.length === 0 && (
+            {/* Loading skeleton */}
+            {loading && displayBooks.length === 0 && (
               <div className="grid grid-cols-4 gap-4">
                 {Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="rounded-xl overflow-hidden animate-pulse">
                     <div
                       className="w-full"
-                      style={{
-                        aspectRatio: "3/4",
-                        background: "var(--surface-2)",
-                      }}
+                      style={{ aspectRatio: "3/4", background: "var(--surface-2)" }}
                     />
                     <div className="p-2.5 space-y-2">
-                      <div
-                        className="h-3 rounded"
-                        style={{ background: "var(--surface-2)", width: "80%" }}
-                      />
-                      <div
-                        className="h-2.5 rounded"
-                        style={{ background: "var(--surface-2)", width: "50%" }}
-                      />
+                      <div className="h-3 rounded" style={{ background: "var(--surface-2)", width: "80%" }} />
+                      <div className="h-2.5 rounded" style={{ background: "var(--surface-2)", width: "50%" }} />
                     </div>
                   </div>
                 ))}
@@ -289,14 +349,11 @@ export default function BookPickerModal({
             {error && !loading && (
               <div
                 className="p-4 rounded-xl flex flex-col items-center gap-2 text-center"
-                style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border)",
-                }}
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
               >
                 <p className="text-sm text-[var(--danger)]">{error}</p>
                 <button
-                  onClick={() => fetchBooks(serverQuery, 1, true)}
+                  onClick={() => doFetch(query, selectedTags, 0, false)}
                   className="text-xs text-[var(--accent-2)] hover:underline cursor-pointer"
                 >
                   Retry
@@ -305,20 +362,22 @@ export default function BookPickerModal({
             )}
 
             {/* Empty state */}
-            {!loading && !error && books.length === 0 && (
+            {!loading && !error && displayBooks.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <BookOpen size={32} className="text-[var(--border)]" />
                 <p className="text-sm text-[var(--text-muted)]">
-                  {query ? `No books match "${query}"` : "No books found"}
+                  {query || selectedTags.length > 0
+                    ? `No books match your filter`
+                    : "No books found"}
                 </p>
               </div>
             )}
 
             {/* Books grid */}
-            {books.length > 0 && (
+            {displayBooks.length > 0 && (
               <>
                 <div className="grid grid-cols-4 gap-4">
-                  {books.map((book) => (
+                  {displayBooks.map((book) => (
                     <BookCard
                       key={book.id}
                       book={book}
@@ -328,8 +387,8 @@ export default function BookPickerModal({
                   ))}
                 </div>
 
-                {/* Load more */}
-                {hasMore && (
+                {/* Load more — only shown when no active filter OR filter matched server results */}
+                {hasMore && displayBooks.length === books.length && (
                   <div className="flex justify-center mt-6">
                     <button
                       onClick={handleLoadMore}
@@ -351,10 +410,9 @@ export default function BookPickerModal({
                   </div>
                 )}
 
-                {/* Page indicator */}
-                {!hasMore && books.length > 0 && (
+                {!hasMore && (
                   <p className="text-center text-[11px] text-[var(--text-muted)] mt-6">
-                    All {books.length} books loaded
+                    {displayBooks.length} book{displayBooks.length !== 1 ? "s" : ""} shown
                   </p>
                 )}
               </>
@@ -368,16 +426,13 @@ export default function BookPickerModal({
           >
             <p className="text-xs text-[var(--text-muted)] max-w-xs">
               {selectedIds.length === 0
-                ? "Pick books to ground your questions — precise queries work best"
-                : `${selectedIds.length} ${selectedIds.length === 1 ? "book" : "books"} selected as context · ask specific questions for best results`}
+                ? "Pick books to ground your questions"
+                : `${selectedIds.length} ${selectedIds.length === 1 ? "book" : "books"} selected as context`}
             </p>
             <button
               onClick={onClose}
               className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl transition-all cursor-pointer hover:opacity-80"
-              style={{
-                background: "var(--accent)",
-                color: "var(--user-bubble-text)",
-              }}
+              style={{ background: "var(--accent)", color: "var(--user-bubble-text)" }}
             >
               <Check size={13} strokeWidth={2.5} />
               Done

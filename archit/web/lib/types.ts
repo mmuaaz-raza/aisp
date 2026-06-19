@@ -3,28 +3,42 @@ export interface Book {
   title: string;
   thumbnail: string;
   tags: string[];
-  index:string
+  index: string;
 }
 
-export type MessageRole = "user" | "assistant";
+/** Matches backend Literal["system","user","assistant"] */
+export type MessageRole = "system" | "user" | "assistant";
 
+/** Matches backend Message (BaseModel) */
 export interface Message {
-  id: string;
   role: MessageRole;
   content: string;
-  timestamp: Date;
+  timestamp: string; // ISO string from backend
 }
 
+/** Matches backend Chat (Document) */
 export interface ChatSession {
-  id: string;
+  id: string;           // MongoDB ObjectId as string
   title: string;
   messages: Message[];
+  summary: string;
+  token_limit: number;
+  tokens_used: number;
+  is_exhausted: boolean;
+  created_at: string;   // ISO datetime
+  updated_at: string;   // ISO datetime
+  /** IDs of books selected for this chat (frontend-only, stored in session) */
   selectedBookIds: string[];
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-export interface ChatRequest {
-  messages: { role: MessageRole; content: string }[];
-  selectedBookIds: string[];
+/** POST /api/v1/query/c */
+export interface SearchRequest {
+  ids: string[];        // PydanticObjectId[] — sent as strings
+  query: string;
+  chat_id: string;      // PydanticObjectId
+}
+
+/** Response from /api/v1/query/c */
+export interface QueryResponse {
+  response: string;
 }

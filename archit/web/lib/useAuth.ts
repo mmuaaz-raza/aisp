@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-const BACKEND = "http://localhost:8000/api/v1";
-const TOKEN_KEY = "archit_token";
-const USER_KEY = "archit_user";
+// Relative path — proxied to http://localhost:8000 via next.config.ts rewrites.
+// This keeps all requests same-origin so browser cookies are sent automatically.
+const BACKEND = "/api/v1";
 
 export interface AuthUser {
   id: string;
@@ -14,43 +14,60 @@ export interface AuthUser {
 
 export interface AuthState {
   user: AuthUser | null;
-  token: string | null;
   loading: boolean;
+  initializing: boolean;
   error: string | null;
   isLoggedIn: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  login: (emailOrUsername: string, password: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   clearError: () => void;
 }
 
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore session from localStorage on mount
+  // On mount, check if server cookie session is valid
   useEffect(() => {
-    try {
-      const t = localStorage.getItem(TOKEN_KEY);
-      const u = localStorage.getItem(USER_KEY);
-      if (t && u) {
-        setToken(t);
-        setUser(JSON.parse(u));
+    (async () => {
+      try {
+        const res = await fetch(`${BACKEND}/auth`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const usr: AuthUser = data.user ?? {
+            id: data.id ?? data.user_id ?? "",
+            name: data.name ?? data.username ?? "",
+            email: data.email ?? "",
+          };
+          setUser(usr);
+        }
+        // Non-2xx (401, 403) just means not logged in — no user set, that's fine
+      } catch (e) {
+        // Only a network/CORS failure reaches here — safe to ignore but log for debugging
+        console.warn("[useAuth] /auth check failed:", e);
+      } finally {
+        setInitializing(false);
       }
-    } catch {
-      // ignore
-    }
+    })();
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (emailOrUsername: string, password: string): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
+      // Send as both `email` and `name` so the backend can match whichever field it uses
+      const body = { name: emailOrUsername, password };
+
       const res = await fetch(`${BACKEND}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        credentials: "include",
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -59,18 +76,11 @@ export function useAuth(): AuthState {
       }
 
       const data = await res.json();
-
-      // Accept: { token, access_token } + { user, name, email, id }
-      const tok: string = data.token ?? data.access_token ?? "";
       const usr: AuthUser = data.user ?? {
         id: data.id ?? data.user_id ?? "",
-        name: data.name ?? data.username ?? email.split("@")[0],
-        email: data.email ?? email,
+        name: data.name ?? data.username ?? emailOrUsername,
+        email: data.email ?? emailOrUsername,
       };
-
-      localStorage.setItem(TOKEN_KEY, tok);
-      localStorage.setItem(USER_KEY, JSON.stringify(usr));
-      setToken(tok);
       setUser(usr);
       return true;
     } catch (e: unknown) {
@@ -81,10 +91,50 @@ export function useAuth(): AuthState {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    setToken(null);
+  const register = useCallback(
+    async (name: string, email: string, password: string): Promise<boolean> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${BACKEND}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ name, email, password }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.detail ?? errData?.message ?? "Registration failed");
+        }
+
+        const data = await res.json();
+        const usr: AuthUser = data.user ?? {
+          id: data.id ?? data.user_id ?? "",
+          name: data.name ?? name,
+          email: data.email ?? email,
+        };
+        setUser(usr);
+        return true;
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Registration failed");
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch(`${BACKEND}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    }
     setUser(null);
     setError(null);
   }, []);
@@ -93,11 +143,12 @@ export function useAuth(): AuthState {
 
   return {
     user,
-    token,
     loading,
+    initializing,
     error,
-    isLoggedIn: !!token,
+    isLoggedIn: !!user,
     login,
+    register,
     logout,
     clearError,
   };

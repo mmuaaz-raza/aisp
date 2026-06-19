@@ -1,4 +1,4 @@
-from fastapi import APIRouter,Depends,Request , responses,HTTPException, status ,Body
+from fastapi import APIRouter,Depends, responses ,Response,HTTPException, status ,Body
 from datetime import datetime, timedelta, timezone
 from beanie import PydanticObjectId
 import jwt
@@ -16,13 +16,14 @@ router = APIRouter(prefix="/auth")
 
 
 @router.get("/")
-async def getMe(user=[dict,Depends(authenticateUser)]):
-    if isinstance(user,responses.Response):
-        return user
-    user =await User.get(PydanticObjectId(user.id))
-    if not user:
+async def getMe(req:Annotated[TokenPayload,Depends(authenticateUser)]):
+    if isinstance(req,Response):
+        return req
+    
+    cuser =await User.get(PydanticObjectId(req.id))
+    if not cuser:
         return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"invalid credentials"})
-    return responses.JSONResponse(status_code=status.HTTP_200_OK,content=user.model_dump(mode="json",exclude={"id","password"}))
+    return responses.JSONResponse(status_code=status.HTTP_200_OK,content=cuser.model_dump(mode="json",exclude={"password"}))
 
 
 
@@ -49,11 +50,11 @@ class RegisterPayload(BaseModel):
 
 async def GenerateAuthToken(user,message="Registered successfully"):
     token :TokenPayload = TokenPayload(id=str(user["id"]),name=user["name"],exp=int((datetime.now(timezone.utc) + timedelta(days=7)).timestamp()))
-    jwt_token =await asyncio.to_thread(jwt.encode,token.model_dump(mode="python"),os.getenv("JWT_SECRET"),algorithm="HS256")
+    jwt_token =jwt.encode(token.model_dump(mode="python"),os.getenv("JWT_SECRET"),algorithm="HS256")
 
     response_obj = responses.JSONResponse(
     content={"message": message},
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     )
     response_obj.set_cookie(
         key="archit_auth",
@@ -101,6 +102,7 @@ class LoginPayload(BaseModel):
 
 @router.post("/login")
 async def Login(dtoken:Annotated[dict,Depends(authenticateUser)],loginp:Annotated[LoginPayload,Body()]):
+
     if isinstance(dtoken,TokenPayload):
         return responses.JSONResponse(status_code=status.HTTP_202_ACCEPTED,content={"message":"signed in already"})
     
@@ -112,6 +114,7 @@ async def Login(dtoken:Annotated[dict,Depends(authenticateUser)],loginp:Annotate
     }
 
     user = await User.find_one(filters)
+
     if not user:
         return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"Password or Username/Email is not correct"})
     

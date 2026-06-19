@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useEffect, KeyboardEvent, ChangeEvent } from "react";
-import { ArrowUp, BookOpen } from "lucide-react";
+import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from "react";
+import { ArrowUp, BookOpen, MessageSquare } from "lucide-react";
+
+export type QueryMode = "books" | "history";
 
 interface ChatInputProps {
   value: string;
@@ -11,6 +13,8 @@ interface ChatInputProps {
   loading: boolean;
   selectedBookCount: number;
   selectedBookTitles: string[];
+  mode: QueryMode;
+  onModeChange: (mode: QueryMode) => void;
   disabled?: boolean;
 }
 
@@ -22,6 +26,8 @@ export default function ChatInput({
   loading,
   selectedBookCount,
   selectedBookTitles,
+  mode,
+  onModeChange,
   disabled,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -36,9 +42,7 @@ export default function ChatInput({
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!loading && value.trim() && selectedBookCount > 0) {
-        onSend();
-      }
+      if (canSend) onSend();
     }
   };
 
@@ -46,7 +50,11 @@ export default function ChatInput({
     onChange(e.target.value);
   };
 
-  const canSend = !loading && value.trim().length > 0 && selectedBookCount > 0;
+  // In history mode sending is always allowed (no book requirement)
+  const canSend =
+    !loading &&
+    value.trim().length > 0 &&
+    (mode === "history" || selectedBookCount > 0);
 
   const bookLabel =
     selectedBookCount === 0
@@ -56,6 +64,13 @@ export default function ChatInput({
         ? selectedBookTitles[0].slice(0, 18) + "…"
         : selectedBookTitles[0]
       : `${selectedBookCount} books`;
+
+  const placeholder =
+    mode === "history"
+      ? "Ask based on this conversation's history…"
+      : selectedBookCount === 0
+      ? "Select books first — this model works best on book-specific questions…"
+      : "Ask a specific question about the selected books…";
 
   return (
     <div className="px-4 pb-5 pt-2">
@@ -74,11 +89,7 @@ export default function ChatInput({
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             disabled={disabled || loading}
-            placeholder={
-              selectedBookCount === 0
-                ? "Select books first — this model works best on book-specific questions…"
-                : "Ask a specific question about the selected books…"
-            }
+            placeholder={placeholder}
             rows={1}
             className="flex-1 resize-none bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none leading-relaxed py-1"
             style={{ maxHeight: "160px" }}
@@ -86,34 +97,90 @@ export default function ChatInput({
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
-          {/* Books button */}
-          <button
-            onClick={onOpenBooks}
-            type="button"
-            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
-              selectedBookCount > 0
-                ? "border-[var(--accent-2)] bg-[var(--accent-light)] text-[var(--accent-2)] hover:bg-[var(--surface-2)]"
-                : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] hover:bg-[var(--accent-light)]"
-            }`}
-            title="Choose books as context"
-          >
-            <BookOpen size={12} />
-            <span>{bookLabel}</span>
-            {selectedBookCount > 0 && (
-              <span
-                className="w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center leading-none"
-                style={{
-                  background: "var(--accent)",
-                  color: "var(--user-bubble-text)",
-                }}
-              >
-                {selectedBookCount}
-              </span>
-            )}
-          </button>
+        <div className="flex items-center justify-between px-3 pb-2.5 pt-1 gap-2">
 
-          {/* Right side */}
+          {/* Left: Mode toggle pill + Books picker */}
+          <div className="flex items-center gap-2">
+            {/* ── Mode toggle pill ── */}
+            <div
+              className="flex items-center rounded-lg border overflow-hidden shrink-0"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <button
+                type="button"
+                onClick={() => onModeChange("books")}
+                title="Answer from selected books"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
+                style={
+                  mode === "books"
+                    ? {
+                        background: "var(--accent)",
+                        color: "var(--user-bubble-text)",
+                      }
+                    : {
+                        background: "transparent",
+                        color: "var(--text-muted)",
+                      }
+                }
+              >
+                <BookOpen size={11} />
+                <span>Books</span>
+              </button>
+
+              {/* divider */}
+              <div style={{ width: 1, background: "var(--border)", height: 20 }} />
+
+              <button
+                type="button"
+                onClick={() => onModeChange("history")}
+                title="Answer from chat history"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
+                style={
+                  mode === "history"
+                    ? {
+                        background: "var(--accent)",
+                        color: "var(--user-bubble-text)",
+                      }
+                    : {
+                        background: "transparent",
+                        color: "var(--text-muted)",
+                      }
+                }
+              >
+                <MessageSquare size={11} />
+                <span>History</span>
+              </button>
+            </div>
+
+            {/* Books picker — only visible in books mode */}
+            {mode === "books" && (
+              <button
+                onClick={onOpenBooks}
+                type="button"
+                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                  selectedBookCount > 0
+                    ? "border-[var(--accent-2)] bg-[var(--accent-light)] text-[var(--accent-2)] hover:bg-[var(--surface-2)]"
+                    : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] hover:bg-[var(--accent-light)]"
+                }`}
+                title="Choose books as context"
+              >
+                <span>{bookLabel}</span>
+                {selectedBookCount > 0 && (
+                  <span
+                    className="w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center leading-none"
+                    style={{
+                      background: "var(--accent)",
+                      color: "var(--user-bubble-text)",
+                    }}
+                  >
+                    {selectedBookCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Right: hint + send */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[var(--text-muted)] hidden sm:block">
               Shift+↵ new line

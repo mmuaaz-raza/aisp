@@ -1,122 +1,34 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Message, Book, ChatSession, ChatRequest } from "@/lib/types";
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Book, SearchRequest } from "@/lib/types";
+import { QueryMode } from "@/components/ChatInput";
 import Sidebar from "@/components/Sidebar";
 import ChatArea from "@/components/ChatArea";
 import BookPickerModal from "@/components/BookPickerModal";
 import LoginModal from "@/components/LoginModal";
+import Header from "@/components/Header";
+import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/lib/useAuth";
+import { Sparkles } from "lucide-react";
 
-const STORAGE_KEY = "archit_chat_sessions";
-
-function reviveDates(sessions: ChatSession[]): ChatSession[] {
-  return sessions.map((s) => ({
-    ...s,
-    createdAt: new Date(s.createdAt),
-    updatedAt: new Date(s.updatedAt),
-    messages: s.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
-  }));
-}
-
-function newSession(selectedBookIds: string[] = []): ChatSession {
-  const now = new Date();
-  return {
-    id: crypto.randomUUID(),
-    title: "New chat",
-    messages: [],
-    selectedBookIds,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export default function ChatPage() {
+export default function NewChatPage() {
   const auth = useAuth();
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
+  const router = useRouter();
+
   const [loading, setLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [bookPickerOpen, setBookPickerOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
+  const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+  const [mode, setMode] = useState<QueryMode>("books");
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = reviveDates(JSON.parse(raw));
-        setSessions(parsed);
-        if (parsed.length > 0) setActiveId(parsed[0].id);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  // Save to localStorage whenever sessions change
-  useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-    }
-  }, [sessions]);
-
-  // Active session derived
-  const activeSession = sessions.find((s) => s.id === activeId) ?? null;
-
-  const updateSession = useCallback(
-    (id: string, patch: Partial<ChatSession>) => {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: new Date() } : s))
-      );
-    },
-    []
-  );
-
-  const handleNewChat = useCallback(() => {
-    const session = newSession(activeSession?.selectedBookIds ?? []);
-    setSessions((prev) => [session, ...prev]);
-    setActiveId(session.id);
-    setInputValue("");
-  }, [activeSession]);
-
-  const handleDeleteSession = useCallback(
-    (id: string) => {
-      setSessions((prev) => {
-        const next = prev.filter((s) => s.id !== id);
-        if (id === activeId) {
-          setActiveId(next.length > 0 ? next[0].id : null);
-        }
-        if (next.length === 0) localStorage.removeItem(STORAGE_KEY);
-        return next;
-      });
-    },
-    [activeId]
-  );
-
-  const handleSelectSession = useCallback((id: string) => {
-    setActiveId(id);
-    setInputValue("");
-  }, []);
-
-  const handleToggleBook = useCallback(
-    (bookId: string) => {
-      if (!activeId) return;
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id !== activeId) return s;
-          const ids = s.selectedBookIds.includes(bookId)
-            ? s.selectedBookIds.filter((b) => b !== bookId)
-            : [...s.selectedBookIds, bookId];
-          return { ...s, selectedBookIds: ids, updatedAt: new Date() };
-        })
-      );
-    },
-    [activeId]
-  );
+  const selectedBooks = selectedBookIds
+    .map((id) => bookRegistry[id])
+    .filter(Boolean) as Book[];
 
   const registerBooks = useCallback((books: Book[]) => {
     setBookRegistry((prev) => {
@@ -126,166 +38,125 @@ export default function ChatPage() {
     });
   }, []);
 
-  const selectedBooks = (activeSession?.selectedBookIds ?? [])
-    .map((id) => bookRegistry[id])
-    .filter(Boolean) as Book[];
+  const handleToggleBook = useCallback((bookId: string) => {
+    setSelectedBookIds((prev) =>
+      prev.includes(bookId)
+        ? prev.filter((id) => id !== bookId)
+        : [...prev, bookId]
+    );
+  }, []);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !activeId || loading) return;
-    if ((activeSession?.selectedBookIds.length ?? 0) === 0) return;
+    if (!inputValue.trim() || loading) return;
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: inputValue.trim(),
-      timestamp: new Date(),
-    };
-
-    const isFirstMessage = (activeSession?.messages.length ?? 0) === 0;
-    const sessionTitle = isFirstMessage
-      ? userMessage.content.slice(0, 48) + (userMessage.content.length > 48 ? "…" : "")
-      : (activeSession?.title ?? "New chat");
-
-    updateSession(activeId, {
-      messages: [...(activeSession?.messages ?? []), userMessage],
-      title: sessionTitle,
-    });
-
+    const query = inputValue.trim();
     setInputValue("");
     setLoading(true);
-    setStreamingContent("");
-
-    const allMessages = [...(activeSession?.messages ?? []), userMessage];
-    const payload: ChatRequest = {
-      messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
-      selectedBookIds: activeSession?.selectedBookIds ?? [],
-    };
 
     try {
-      const res = await fetch("/api/chat", {
+      // 1. Create a new chat
+      const chatRes = await fetch("/api/v1/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ query }),
+      });
+      if (!chatRes.ok) throw new Error(`Failed to create chat (${chatRes.status})`);
+      const chat = await chatRes.json();
+      const chatId: string = chat.id;
+
+      // 2. Send the first query
+      const payload: SearchRequest = {
+        ids: mode === "history" ? [] : selectedBookIds,
+        query,
+        chat_id: chatId,
+      };
+      const queryRes = await fetch("/api/v1/chats/c", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
+      if (!queryRes.ok) throw new Error(`Query failed (${queryRes.status})`);
 
-      if (!res.ok) throw new Error(`Backend returned ${res.status}`);
-
-      const contentType = res.headers.get("content-type") ?? "";
-      let accumulated = "";
-
-      if (
-        res.body &&
-        (contentType.includes("stream") ||
-          contentType.includes("text/plain") ||
-          contentType.includes("text/event-stream"))
-      ) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-
-          if (contentType.includes("event-stream")) {
-            for (const line of chunk.split("\n")) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6).trim();
-                if (data === "[DONE]") continue;
-                try {
-                  const parsed = JSON.parse(data);
-                  accumulated +=
-                    parsed?.choices?.[0]?.delta?.content ??
-                    parsed?.content ??
-                    parsed?.text ??
-                    "";
-                } catch {
-                  accumulated += data;
-                }
-              }
-            }
-          } else {
-            accumulated += chunk;
-          }
-          setStreamingContent(accumulated);
-        }
-      } else {
-        const data = await res.json();
-        accumulated =
-          data?.content ?? data?.message ?? data?.answer ?? data?.response ?? JSON.stringify(data);
-      }
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: accumulated,
-        timestamp: new Date(),
-      };
-
-      updateSession(activeId, {
-        messages: [...allMessages, assistantMessage],
-      });
+      // 3. Navigate to the chat page — it will fetch the saved messages from the backend
+      router.push(`/chat/c/${chatId}`);
     } catch (err) {
       console.error(err);
-      const errMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content:
-          "Sorry, I couldn't reach the backend. Please make sure the Python server is running and try again.",
-        timestamp: new Date(),
-      };
-      updateSession(activeId, {
-        messages: [...allMessages, errMsg],
-      });
-    } finally {
       setLoading(false);
-      setStreamingContent("");
     }
   };
 
-  // If no active session, create one lazily
-  const ensureSession = () => {
-    if (!activeId) {
-      handleNewChat();
-    }
-  };
+  // ── Auth loading / gate ──────────────────────────────────────────────────
+  if (auth.initializing) {
+    return (
+      <div
+        className="fixed inset-0 flex items-center justify-center"
+        style={{ background: "var(--bg)" }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse"
+            style={{ background: "var(--accent-light)" }}
+          >
+            <Sparkles size={22} className="text-[var(--accent-2)]" />
+          </div>
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full animate-bounce"
+                style={{ background: "var(--text-muted)", animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!auth.isLoggedIn) {
+    return <AuthGate auth={auth} />;
+  }
 
   return (
-    <div className="flex h-screen bg-[var(--bg)]" onClick={ensureSession}>
-      <Sidebar
-        sessions={[...sessions].sort(
-          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        )}
-        activeSessionId={activeId}
-        onNewChat={handleNewChat}
-        onSelectSession={handleSelectSession}
-        onDeleteSession={handleDeleteSession}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+    <div className="flex flex-col h-screen bg-[var(--bg)]">
+      {/* ── Top Header ── */}
+      <Header
         isLoggedIn={auth.isLoggedIn}
         authUser={auth.user}
         onLoginClick={() => setLoginModalOpen(true)}
         onLogout={auth.logout}
       />
 
-      <ChatArea
-        messages={activeSession?.messages ?? []}
-        loading={loading}
-        streamingContent={streamingContent}
-        selectedBooks={selectedBooks}
-        inputValue={inputValue}
-        onInputChange={setInputValue}
-        onSend={handleSend}
-        onOpenBookPicker={() => {
-          ensureSession();
-          setBookPickerOpen(true);
-        }}
-      />
+      {/* ── Main content: sidebar + chat ── */}
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          activeChatId={null}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+          isLoggedIn={auth.isLoggedIn}
+          onLoginClick={() => setLoginModalOpen(true)}
+        />
+
+        <ChatArea
+          messages={[]}
+          loading={loading}
+          streamingContent=""
+          selectedBooks={selectedBooks}
+          inputValue={inputValue}
+          onInputChange={setInputValue}
+          onSend={handleSend}
+          onOpenBookPicker={() => setBookPickerOpen(true)}
+          mode={mode}
+          onModeChange={setMode}
+        />
+      </div>
 
       <BookPickerModal
         open={bookPickerOpen}
         onClose={() => setBookPickerOpen(false)}
-        selectedIds={activeSession?.selectedBookIds ?? []}
+        selectedIds={selectedBookIds}
         onToggleBook={handleToggleBook}
         onBooksLoaded={registerBooks}
       />

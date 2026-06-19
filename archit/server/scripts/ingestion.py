@@ -39,7 +39,7 @@ async def DownloadContent(body:BookUrl)->bool:
 
 
 
-async def saveChunks(models,qd_client):
+async def saveChunks(models):
     docs =await Doc.find(Doc.is_embedded==False).to_list()
 
     for doc in docs:
@@ -47,7 +47,7 @@ async def saveChunks(models,qd_client):
         docList = [c.text for c in chunks]
         embeddings =models["embedder"].encode(docList)
 
-        await qd_client.upsert(
+        await models["qd_client"].upsert(
             collection_name="books",
             points=[
                 mod.PointStruct(
@@ -58,6 +58,7 @@ async def saveChunks(models,qd_client):
                     },
                     payload={
                         "m_id": str(doc.id),
+                        "title" : str(doc.title),
                         "text": c.text,
                         "token_count": c.token_count,
                     }

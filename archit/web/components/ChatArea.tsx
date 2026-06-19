@@ -3,7 +3,7 @@
 import { useRef, useEffect } from "react";
 import { Message, Book } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
-import ChatInput from "./ChatInput";
+import ChatInput, { QueryMode } from "./ChatInput";
 import { Sparkles } from "lucide-react";
 
 interface ChatAreaProps {
@@ -15,6 +15,8 @@ interface ChatAreaProps {
   onInputChange: (val: string) => void;
   onSend: () => void;
   onOpenBookPicker: () => void;
+  mode: QueryMode;
+  onModeChange: (mode: QueryMode) => void;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -33,6 +35,8 @@ export default function ChatArea({
   onInputChange,
   onSend,
   onOpenBookPicker,
+  mode,
+  onModeChange,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -109,8 +113,8 @@ export default function ChatArea({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+        {messages.map((msg, idx) => (
+          <MessageBubble key={`${msg.role}-${msg.timestamp}-${idx}`} message={msg} />
         ))}
 
         {/* Live streaming */}
@@ -178,6 +182,8 @@ export default function ChatArea({
         loading={loading}
         selectedBookCount={selectedBooks.length}
         selectedBookTitles={selectedBooks.map((b) => b.title)}
+        mode={mode}
+        onModeChange={onModeChange}
       />
     </div>
   );

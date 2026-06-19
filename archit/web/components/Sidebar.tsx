@@ -1,39 +1,34 @@
 "use client";
 
-import { ChatSession } from "@/lib/types";
-import { AuthUser } from "@/lib/useAuth";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTheme } from "@/lib/useTheme";
 import {
   Plus,
   MessageSquare,
-  Trash2,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   Sun,
   Moon,
-  LogIn,
-  LogOut,
   Lock,
-  User,
+  LogIn,
+  Trash2,
 } from "lucide-react";
 
-interface SidebarProps {
-  sessions: ChatSession[];
-  activeSessionId: string | null;
-  onNewChat: () => void;
-  onSelectSession: (id: string) => void;
-  onDeleteSession: (id: string) => void;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
-  // Auth
-  isLoggedIn: boolean;
-  authUser: AuthUser | null;
-  onLoginClick: () => void;
-  onLogout: () => void;
+/** Shape returned by GET /api/v1/chats (messages excluded) */
+interface ChatListItem {
+  id: string;
+  title: string;
+  summary: string;
+  token_limit: number;
+  tokens_used: number;
+  is_exhausted: boolean;
+  created_at: string; // ISO datetime
+  updated_at: string; // ISO datetime
 }
 
-function groupByDate(sessions: ChatSession[]) {
+function groupByDate(chats: ChatListItem[]) {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
@@ -42,60 +37,173 @@ function groupByDate(sessions: ChatSession[]) {
 
   const isToday = (d: Date) => d.toDateString() === today.toDateString();
   const isYesterday = (d: Date) => d.toDateString() === yesterday.toDateString();
-  const isLastWeek = (d: Date) =>
-    d >= lastWeek && !isToday(d) && !isYesterday(d);
+  const isLastWeek = (d: Date) => d >= lastWeek && !isToday(d) && !isYesterday(d);
 
-  const groups: { label: string; items: ChatSession[] }[] = [
+  const groups: { label: string; items: ChatListItem[] }[] = [
     { label: "Today", items: [] },
     { label: "Yesterday", items: [] },
     { label: "Past 7 days", items: [] },
     { label: "Older", items: [] },
   ];
 
-  for (const s of sessions) {
-    const d = new Date(s.updatedAt);
-    if (isToday(d)) groups[0].items.push(s);
-    else if (isYesterday(d)) groups[1].items.push(s);
-    else if (isLastWeek(d)) groups[2].items.push(s);
-    else groups[3].items.push(s);
+  // Sort newest-first before grouping
+  const sorted = [...chats].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+
+  for (const c of sorted) {
+    const d = new Date(c.updated_at);
+    if (isToday(d)) groups[0].items.push(c);
+    else if (isYesterday(d)) groups[1].items.push(c);
+    else if (isLastWeek(d)) groups[2].items.push(c);
+    else groups[3].items.push(c);
   }
 
   return groups.filter((g) => g.items.length > 0);
 }
 
+interface SidebarProps {
+  activeChatId: string | null;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  isLoggedIn: boolean;
+  onLoginClick: () => void;
+}
+
+
+
 export default function Sidebar({
-  sessions,
-  activeSessionId,
-  onNewChat,
-  onSelectSession,
-  onDeleteSession,
+  activeChatId,
   collapsed,
   onToggleCollapse,
   isLoggedIn,
-  authUser,
   onLoginClick,
-  onLogout,
 }: SidebarProps) {
   const { theme, toggle } = useTheme();
-  const groups = groupByDate(sessions);
+  const router = useRouter();
+  const [chats, setChats] = useState<ChatListItem[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingChat = chats.find((c) => c.id === pendingDeleteId) ?? null;
+  // Incremented manually after create/delete — avoids activeChatId as a dep
+  // (which caused a re-fetch — and parent re-render — on every navigation)
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Fetch chat list from backend
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const controller = new AbortController();
+    fetch("/api/v1/chats", {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: ChatListItem[]) => setChats(Array.isArray(data) ? data : []))
+      .catch((err) => { if (err.name !== "AbortError") setChats([]); });
+    return () => controller.abort();
+  }, [isLoggedIn, refreshKey]); // refreshKey is only bumped after create/delete
+
+  const handleNewChat = async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const res = await fetch("/api/v1/chats/c", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const chat = await res.json();
+      setRefreshKey((k) => k + 1); // refresh list after creation
+      router.push(`/chat/c/${chat.id}`);
+    } catch {
+      // silently fail; user can retry
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const confirmDeleteChat = async () => {
+    if (!pendingDeleteId) return;
+    const chatId = pendingDeleteId;
+    setPendingDeleteId(null);
+    setChats((prev) => prev.filter((c) => c.id !== chatId));
+    if (chatId === activeChatId) router.push("/chat");
+    try {
+      await fetch(`/api/v1/chats/${chatId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      setRefreshKey((k) => k + 1); // refresh list after deletion
+    } catch {
+      // silently ignore
+    }
+  };
+
+  const groups = groupByDate(chats);
 
   return (
-    <aside
-      className={`flex flex-col h-full border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out shrink-0 ${
-        collapsed ? "w-14" : "w-64"
-      }`}
+    <>
+      {/* ── Confirmation modal ── */}
+      {pendingDeleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.45)" }}
+          onClick={() => setPendingDeleteId(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl p-5 shadow-xl flex flex-col gap-4"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Delete chat?
+              </p>
+              <p className="text-xs text-[var(--text-muted)] truncate">
+                &ldquo;{pendingChat?.title}&rdquo;
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                This can&apos;t be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPendingDeleteId(null)}
+                className="text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--text-muted)",
+                  background: "transparent",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteChat}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 cursor-pointer"
+                style={{
+                  background: "var(--danger, #e53e3e)",
+                  color: "#fff",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <aside
+      className={`flex flex-col h-full border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out shrink-0 ${collapsed ? "w-14" : "w-64"
+        }`}
     >
       {/* ── Header ── */}
-      <div
-        className="flex items-center justify-between px-3 py-4 border-b border-[var(--border)] min-h-[57px]"
-      >
+      <div className="flex items-center justify-between px-3 py-4 border-b border-[var(--border)] min-h-[57px]">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Sparkles size={15} className="text-[var(--accent-2)]" />
-            <span className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">
-              Archit
-            </span>
-          </div>
+          <span className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+            History
+          </span>
         )}
 
         <div className={`flex items-center gap-1 ${collapsed ? "mx-auto" : ""}`}>
@@ -113,11 +221,12 @@ export default function Sidebar({
           {/* New chat */}
           {!collapsed && (
             <button
-              onClick={onNewChat}
+              onClick={handleNewChat}
+              disabled={creating}
               title="New chat"
-              className="p-1.5 rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--accent-2)] transition-colors cursor-pointer"
+              className="p-1.5 rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--accent-2)] transition-colors cursor-pointer disabled:opacity-50"
             >
-              <Plus size={15} />
+              <Plus size={15} className={creating ? "animate-spin" : ""} />
             </button>
           )}
 
@@ -136,11 +245,12 @@ export default function Sidebar({
       {collapsed && (
         <div className="flex flex-col items-center pt-3 gap-2">
           <button
-            onClick={onNewChat}
+            onClick={handleNewChat}
+            disabled={creating}
             title="New chat"
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--accent-2)] transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--accent-2)] transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Plus size={17} />
+            <Plus size={17} className={creating ? "animate-spin" : ""} />
           </button>
           <button
             onClick={toggle}
@@ -149,48 +259,13 @@ export default function Sidebar({
           >
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-          {/* Auth icon (collapsed) */}
-          <button
-            onClick={isLoggedIn ? onLogout : onLoginClick}
-            title={isLoggedIn ? `Logged in as ${authUser?.name}` : "Sign in"}
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-          >
-            {isLoggedIn ? <User size={15} /> : <LogIn size={15} />}
-          </button>
         </div>
       )}
 
       {/* ── Expanded: history list ── */}
       {!collapsed && (
         <div className="flex-1 overflow-y-auto py-2 px-2 relative">
-          {/* Session list (always rendered) */}
-          {sessions.length === 0 && isLoggedIn ? (
-            <div className="flex flex-col items-center justify-center h-40 gap-2 text-center px-4">
-              <MessageSquare size={20} className="text-[var(--border)]" />
-              <p className="text-xs text-[var(--text-muted)]">
-                No chats yet. Start a new conversation.
-              </p>
-            </div>
-          ) : isLoggedIn ? (
-            groups.map((group) => (
-              <div key={group.label} className="mb-3">
-                <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-2 pb-1">
-                  {group.label}
-                </p>
-                <div className="space-y-0.5">
-                  {group.items.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      isActive={session.id === activeSessionId}
-                      onSelect={() => onSelectSession(session.id)}
-                      onDelete={() => onDeleteSession(session.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          ) : (
+          {!isLoggedIn ? (
             /* ── Logged-out placeholder list (blurred) ── */
             <div className="relative">
               {/* Fake rows */}
@@ -242,81 +317,56 @@ export default function Sidebar({
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Footer: user info / login button ── */}
-      {!collapsed && (
-        <div
-          className="px-3 py-3 border-t border-[var(--border)] shrink-0"
-        >
-          {isLoggedIn && authUser ? (
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-                style={{
-                  background: "var(--accent-light)",
-                  color: "var(--accent)",
-                }}
-              >
-                {authUser.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[var(--text-primary)] truncate">
-                  {authUser.name}
-                </p>
-                <p className="text-[10px] text-[var(--text-muted)] truncate">
-                  {authUser.email}
-                </p>
-              </div>
-              <button
-                onClick={onLogout}
-                title="Sign out"
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--danger)] transition-colors cursor-pointer shrink-0"
-              >
-                <LogOut size={13} />
-              </button>
+          ) : chats.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-2 text-center px-4">
+              <MessageSquare size={20} className="text-[var(--border)]" />
+              <p className="text-xs text-[var(--text-muted)]">
+                No chats yet. Start a new conversation.
+              </p>
             </div>
           ) : (
-            <button
-              onClick={onLoginClick}
-              className="w-full flex items-center justify-center gap-2 text-xs font-medium py-2 rounded-lg border transition-all cursor-pointer hover:opacity-80"
-              style={{
-                border: "1px solid var(--border)",
-                color: "var(--text-primary)",
-                background: "var(--surface-2)",
-              }}
-            >
-              <LogIn size={13} />
-              Sign in
-            </button>
+            groups.map((group) => (
+              <div key={group.label} className="mb-3">
+                <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-2 pb-1">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map((chat) => (
+                    <ChatRow
+                      key={chat.id}
+                      chat={chat}
+                      isActive={chat.id === activeChatId}
+                      onDelete={() => setPendingDeleteId(chat.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}
     </aside>
+    </>
   );
 }
 
-function SessionRow({
-  session,
+function ChatRow({
+  chat,
   isActive,
-  onSelect,
   onDelete,
 }: {
-  session: ChatSession;
+  chat: ChatListItem;
   isActive: boolean;
-  onSelect: () => void;
   onDelete: () => void;
 }) {
   return (
-    <div
-      className={`group flex items-center gap-1.5 rounded-lg px-2 py-2 cursor-pointer transition-colors ${
+    <Link
+      href={`/chat/c/${chat.id}`}
+      className={`group flex items-center gap-1.5 rounded-lg px-2 py-2 transition-colors ${
         isActive
           ? "bg-[var(--accent-light)] text-[var(--accent)]"
           : "hover:bg-[var(--surface-2)] text-[var(--text-primary)]"
       }`}
-      onClick={onSelect}
     >
       <MessageSquare
         size={13}
@@ -329,18 +379,19 @@ function SessionRow({
           isActive ? "text-[var(--accent)]" : ""
         }`}
       >
-        {session.title}
+        {chat.title}
       </span>
       <button
         onClick={(e) => {
+          e.preventDefault(); // don't navigate
           e.stopPropagation();
           onDelete();
         }}
-        title="Delete"
-        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] transition-all cursor-pointer"
+        title="Delete chat"
+        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all cursor-pointer text-[var(--text-muted)] hover:text-[var(--danger)]"
       >
         <Trash2 size={11} />
       </button>
-    </div>
+    </Link>
   );
 }
