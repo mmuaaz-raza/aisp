@@ -100,7 +100,7 @@ export default function NewChatPage() {
             className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse"
             style={{ background: "var(--accent-light)" }}
           >
-            <Sparkles size={22} className="text-[var(--accent-2)]" />
+            <img src="/favicon/favicon.svg" alt="Logo" width={22} height={22} />
           </div>
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (

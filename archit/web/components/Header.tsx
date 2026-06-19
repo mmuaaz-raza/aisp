@@ -50,7 +50,7 @@ export default function Header({
       {/* Brand & Title */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 pr-3" style={chatTitle ? { borderRight: "1px solid var(--border)" } : {}}>
-          <Sparkles size={15} className="text-[var(--accent-2)]" />
+          <img src="/favicon/favicon.svg" alt="Logo" width={15} height={15} />
           <span className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">
             Archit
           </span>

@@ -56,7 +56,7 @@ export default function ChatArea({
               className="w-12 h-12 rounded-2xl flex items-center justify-center"
               style={{ background: "var(--accent-light)" }}
             >
-              <Sparkles size={22} className="text-[var(--accent-2)]" />
+              <img src="/favicon/favicon.svg" alt="Logo" width={22} height={22} />
             </div>
             <div className="flex flex-col items-center">
               <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight text-center">
@@ -131,7 +131,7 @@ export default function ChatArea({
                   borderColor: "var(--border)",
                 }}
               >
-                <Sparkles size={13} className="text-[var(--accent-2)]" />
+                <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
               </div>
               <div className="text-sm text-[var(--text-primary)] leading-relaxed">
                 <div className="prose">
@@ -157,7 +157,7 @@ export default function ChatArea({
                   borderColor: "var(--border)",
                 }}
               >
-                <Sparkles size={13} className="text-[var(--accent-2)]" />
+                <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
               </div>
               <div className="flex gap-1 items-center h-7">
                 {[0, 1, 2].map((i) => (

@@ -123,7 +123,7 @@ export default function AuthGate({ auth }: AuthGateProps) {
               className="w-11 h-11 rounded-2xl flex items-center justify-center"
               style={{ background: "var(--accent-light)", border: "1px solid var(--border-light)" }}
             >
-              <Sparkles size={22} className="text-[var(--accent-2)]" />
+              <img src="/favicon/favicon.svg" alt="Logo" width={22} height={22} />
             </div>
             <span className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
               Archit

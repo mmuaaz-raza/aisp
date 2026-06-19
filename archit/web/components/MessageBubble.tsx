@@ -108,7 +108,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     <div className="flex justify-start group px-4 py-1 animate-message">
       <div className="flex items-end gap-2 max-w-[80%]">
         <div className="shrink-0 w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center self-start mt-1">
-          <Sparkles size={13} className="text-[var(--accent-2)]" />
+          <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
         </div>
         <div className="flex flex-col gap-1 w-full">
           <div className="text-sm text-[var(--text-primary)] leading-relaxed">
