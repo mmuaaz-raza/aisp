@@ -11,14 +11,18 @@ interface MessageBubbleProps {
 
 function formatTime(timestamp: string) {
   if (!timestamp) return "Just now";
-  let d = new Date(timestamp);
-  // If backend returned naive UTC datetime without 'Z', JS might fail to parse or parse as local
-  if (isNaN(d.getTime()) && !timestamp.endsWith("Z")) {
-    d = new Date(timestamp + "Z");
+  
+  // If the backend returns a naive UTC datetime (no 'Z' or offset), append 'Z'
+  // so JS correctly interprets it as UTC and converts it to the user's local time.
+  let timeStr = timestamp;
+  if (!timeStr.endsWith("Z") && !timeStr.includes("+") && timeStr.includes("T")) {
+    timeStr += "Z";
   }
+
+  const d = new Date(timeStr);
   if (isNaN(d.getTime())) return "Just now";
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -33,6 +37,22 @@ function formatTime(timestamp: string) {
 function parseUserQuery(content: string): string {
   const match = content.match(/<query>([\s\S]*?)<\/query>/i);
   return match ? match[1].trim() : content;
+}
+
+function TypewriterLines({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const [visibleLines, setVisibleLines] = useState(1);
+
+  useEffect(() => {
+    if (visibleLines < lines.length) {
+      const timer = setTimeout(() => {
+        setVisibleLines((v) => v + 1);
+      }, 80); // minor delay per line
+      return () => clearTimeout(timer);
+    }
+  }, [visibleLines, lines.length]);
+
+  return <ReactMarkdown>{lines.slice(0, visibleLines).join("\n")}</ReactMarkdown>;
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
@@ -62,7 +82,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end group px-4 py-1">
+      <div className="flex justify-end group px-4 py-1 animate-message">
         <div className="flex items-end gap-2 max-w-[75%]">
           <span className="text-[10px] text-[var(--text-muted)] self-end mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatTime(message.timestamp)}
@@ -85,7 +105,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   return (
-    <div className="flex justify-start group px-4 py-1">
+    <div className="flex justify-start group px-4 py-1 animate-message">
       <div className="flex items-end gap-2 max-w-[80%]">
         <div className="shrink-0 w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center self-start mt-1">
           <Sparkles size={13} className="text-[var(--accent-2)]" />
@@ -93,7 +113,11 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         <div className="flex flex-col gap-1 w-full">
           <div className="text-sm text-[var(--text-primary)] leading-relaxed">
             <div className="prose">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              {message.isNew ? (
+                <TypewriterLines text={message.content} />
+              ) : (
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              )}
             </div>
           </div>
           

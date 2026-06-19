@@ -24,7 +24,7 @@ export default function NewChatPage() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-  const [mode, setMode] = useState<QueryMode>("books");
+  const [mode, setMode] = useState<QueryMode>("library");
 
   const selectedBooks = selectedBookIds
     .map((id) => bookRegistry[id])
@@ -67,9 +67,10 @@ export default function NewChatPage() {
 
       // 2. Send the first query
       const payload: SearchRequest = {
-        ids: mode === "history" ? [] : selectedBookIds,
+        ids: mode === "history" || mode === "library" ? [] : selectedBookIds,
         query,
         chat_id: chatId,
+        is_entire_corpus: mode === "library",
       };
       const queryRes = await fetch("/api/v1/chats/c", {
         method: "POST",
@@ -127,6 +128,7 @@ export default function NewChatPage() {
         authUser={auth.user}
         onLoginClick={() => setLoginModalOpen(true)}
         onLogout={auth.logout}
+        chatTitle="New Chat"
       />
 
       {/* ── Main content: sidebar + chat ── */}

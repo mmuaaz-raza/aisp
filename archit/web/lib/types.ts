@@ -14,6 +14,7 @@ export interface Message {
   role: MessageRole;
   content: string;
   timestamp: string; // ISO string from backend
+  isNew?: boolean;   // Frontend only: flag to animate typing effect
 }
 
 /** Matches backend Chat (Document) */
@@ -36,6 +37,7 @@ export interface SearchRequest {
   ids: string[];        // PydanticObjectId[] — sent as strings
   query: string;
   chat_id: string;      // PydanticObjectId
+  is_entire_corpus?: boolean;
 }
 
 /** Response from /api/v1/query/c */

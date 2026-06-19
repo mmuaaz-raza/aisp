@@ -43,7 +43,7 @@ export default function ChatConversationPage({
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-  const [mode, setMode] = useState<QueryMode>("books");
+  const [mode, setMode] = useState<QueryMode>("library");
 
   // ── Fetch chat on mount ───────────────────────────────────────────────────
   useEffect(() => {
@@ -109,9 +109,10 @@ export default function ChatConversationPage({
     setLoading(true);
 
     const payload: SearchRequest = {
-      ids: mode === "history" ? [] : selectedBookIds,
+      ids: mode === "history" || mode === "library" ? [] : selectedBookIds,
       query,
       chat_id: chatId,
+      is_entire_corpus: mode === "library",
     };
 
     try {
@@ -135,6 +136,7 @@ export default function ChatConversationPage({
         role: "assistant",
         content: responseText,
         timestamp: new Date().toISOString(),
+        isNew: true,
       };
 
       setChat((prev) =>
@@ -268,6 +270,7 @@ export default function ChatConversationPage({
         authUser={auth.user}
         onLoginClick={() => setLoginModalOpen(true)}
         onLogout={auth.logout}
+        chatTitle={chat?.title}
       />
 
       {/* ── Main content: sidebar + chat ── */}

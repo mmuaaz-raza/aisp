@@ -41,9 +41,7 @@ export default function ChatArea({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    // Auto-scroll intentionally disabled so the view stays at the same level
   }, [messages, streamingContent]);
 
   const isEmpty = messages.length === 0;
@@ -60,20 +58,25 @@ export default function ChatArea({
             >
               <Sparkles size={22} className="text-[var(--accent-2)]" />
             </div>
-            <div>
-              <h2 className="text-base font-semibold text-[var(--text-primary)] mb-1">
-                Specialized book analysis
+            <div className="flex flex-col items-center">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight text-center">
+                {mode === "library"
+                  ? "Explore the Library"
+                  : mode === "books" && selectedBooks.length > 0
+                  ? `Analyzing ${selectedBooks.length === 1 ? `"${selectedBooks[0].title}"` : `${selectedBooks.length} books`}`
+                  : mode === "books"
+                  ? "Book-Grounded Analysis"
+                  : "Continue the Discussion"}
               </h2>
-              <p className="text-sm text-[var(--text-muted)] max-w-sm">
-                {selectedBooks.length === 0
-                  ? "Select books from the library below. This model excels at specific, book-grounded questions — not general knowledge."
-                  : `Analyzing ${selectedBooks.length === 1 ? `"${selectedBooks[0].title}"` : `${selectedBooks.length} books`}. Ask targeted questions for best results.`}
+              <p className="text-sm text-[var(--text-muted)] max-w-[420px] text-center leading-relaxed">
+                {mode === "library"
+                  ? "Ask anything. I'll search across our entire collection of texts to find the most accurate answers."
+                  : mode === "books" && selectedBooks.length > 0
+                  ? "Ask targeted questions based on your selection for highly accurate, text-grounded insights."
+                  : mode === "books"
+                  ? "Select specific books below to ground the AI's responses in specialized knowledge."
+                  : "Follow up on previous answers or pivot the conversation to a new topic."}
               </p>
-              {selectedBooks.length === 0 && (
-                <p className="text-xs text-[var(--text-muted)] mt-2 opacity-70">
-                  💡 Tip: precise, book-specific questions get far better answers than broad ones.
-                </p>
-              )}
             </div>
 
             {selectedBooks.length > 0 && (

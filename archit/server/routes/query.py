@@ -61,11 +61,14 @@ async def SearchBook(user: Annotated[dict,Depends(authenticateUser)], req:Search
     if current_chat.is_exhausted:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED,detail={"message":"Token limit for this chat has been exceeded"})
 
+    if len(current_chat.messages) == 1:
+        splitted = req.query.strip().split(" ")
+        current_chat.title = " ".join(splitted[:min(len(splitted),30)])
 
-        
     Responses = []
     docs = []
     extracted_ids = []
+
     if len(req.ids) and not req.is_entire_corpus:
         filters = {}
         filters["_id"]= {"$in":req.ids}
@@ -89,7 +92,7 @@ async def SearchBook(user: Annotated[dict,Depends(authenticateUser)], req:Search
                     key="m_id", 
                     match=mod.MatchAny(any=extracted_ids) 
                 )
-            ]if req.is_entire_corpus else [])
+            ]if not req.is_entire_corpus else [])
         ),limit=5
         )
         matched_documents = search_results.points

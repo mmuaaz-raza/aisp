@@ -35,7 +35,8 @@ async def newChat(user:Annotated[TokenPayload,Depends(authenticateUser)],query:A
         if not cuser :
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail={"message":"invalid credentials."})
 
-        new_chat  = Chat(userId=cast(Link[User], cuser),title=" ".join(query.split(" ")[:14]))
+        splitted = query.strip().split(" ")
+        new_chat  = Chat(userId=cast(Link[User], cuser),title=" ".join(splitted[:min(len(splitted),30)]))
         await new_chat.save()
         return JSONResponse(status_code=status.HTTP_201_CREATED,content=new_chat.model_dump(mode="json"))
    

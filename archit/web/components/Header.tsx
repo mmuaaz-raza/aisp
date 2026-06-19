@@ -9,6 +9,7 @@ interface HeaderProps {
   authUser: AuthUser | null;
   onLoginClick: () => void;
   onLogout: () => void;
+  chatTitle?: string;
 }
 
 export default function Header({
@@ -16,6 +17,7 @@ export default function Header({
   authUser,
   onLoginClick,
   onLogout,
+  chatTitle,
 }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,12 +47,19 @@ export default function Header({
         height: "57px",
       }}
     >
-      {/* Brand */}
-      <div className="flex items-center gap-2">
-        <Sparkles size={15} className="text-[var(--accent-2)]" />
-        <span className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">
-          Archit
-        </span>
+      {/* Brand & Title */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 pr-3" style={chatTitle ? { borderRight: "1px solid var(--border)" } : {}}>
+          <Sparkles size={15} className="text-[var(--accent-2)]" />
+          <span className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">
+            Archit
+          </span>
+        </div>
+        {chatTitle && (
+          <span className="text-sm text-[var(--text-muted)] font-medium truncate max-w-[200px] sm:max-w-[400px]">
+            {chatTitle}
+          </span>
+        )}
       </div>
 
       {/* Auth control */}
@@ -62,17 +71,7 @@ export default function Header({
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors cursor-pointer hover:bg-[var(--surface-2)]"
             style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
           >
-            {/* Avatar */}
-            <span
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-              style={{
-                background: "var(--accent-light)",
-                color: "var(--accent)",
-              }}
-            >
-              {authUser.name.charAt(0).toUpperCase()}
-            </span>
-            <span className="max-w-[120px] truncate hidden sm:block">{authUser.name}</span>
+            <span className="max-w-[150px] truncate">{authUser.name}</span>
             <ChevronDown
               size={12}
               className={`text-[var(--text-muted)] transition-transform ${menuOpen ? "rotate-180" : ""}`}
@@ -103,13 +102,7 @@ export default function Header({
 
               {/* Actions */}
               <div className="p-1.5">
-                <button
-                  id="header-profile-btn"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
-                >
-                  <User size={13} />
-                  Profile
-                </button>
+            
                 <button
                   id="header-logout-btn"
                   onClick={handleLogout}

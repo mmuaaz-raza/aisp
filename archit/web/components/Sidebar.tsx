@@ -103,23 +103,16 @@ export default function Sidebar({
     return () => controller.abort();
   }, [isLoggedIn, refreshKey]); // refreshKey is only bumped after create/delete
 
-  const handleNewChat = async () => {
-    if (creating) return;
-    setCreating(true);
-    try {
-      const res = await fetch("/api/v1/chats/c", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      const chat = await res.json();
-      setRefreshKey((k) => k + 1); // refresh list after creation
-      router.push(`/chat/c/${chat.id}`);
-    } catch {
-      // silently fail; user can retry
-    } finally {
-      setCreating(false);
+  const handleNewChat = () => {
+    // If we are already on the new chat page (activeChatId is null), do nothing.
+    if (activeChatId === null) return;
+    
+    // Navigate to the fresh chat page where the user can enter their prompt.
+    router.push("/chat");
+    
+    // Collapse sidebar on mobile automatically when starting a new chat
+    if (window.innerWidth < 768 && !collapsed) {
+      onToggleCollapse();
     }
   };
 

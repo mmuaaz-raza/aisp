@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from "react";
-import { ArrowUp, BookOpen, MessageSquare } from "lucide-react";
+import { ArrowUp, BookOpen, MessageSquare, Library } from "lucide-react";
 
-export type QueryMode = "books" | "history";
+export type QueryMode = "books" | "history" | "library";
 
 interface ChatInputProps {
   value: string;
@@ -50,11 +50,11 @@ export default function ChatInput({
     onChange(e.target.value);
   };
 
-  // In history mode sending is always allowed (no book requirement)
+  // In history/library mode sending is always allowed (no book requirement)
   const canSend =
     !loading &&
     value.trim().length > 0 &&
-    (mode === "history" || selectedBookCount > 0);
+    (mode !== "books" || selectedBookCount > 0);
 
   const bookLabel =
     selectedBookCount === 0
@@ -68,6 +68,8 @@ export default function ChatInput({
   const placeholder =
     mode === "history"
       ? "Ask based on this conversation's history…"
+      : mode === "library"
+      ? "Search across the entire library…"
       : selectedBookCount === 0
       ? "Select books first — this model works best on book-specific questions…"
       : "Ask a specific question about the selected books…";
@@ -108,6 +110,29 @@ export default function ChatInput({
             >
               <button
                 type="button"
+                onClick={() => onModeChange("library")}
+                title="Answer from entire library"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
+                style={
+                  mode === "library"
+                    ? {
+                        background: "var(--accent)",
+                        color: "var(--user-bubble-text)",
+                      }
+                    : {
+                        background: "transparent",
+                        color: "var(--text-muted)",
+                      }
+                }
+              >
+                <Library size={11} />
+                <span>Library</span>
+              </button>
+
+              <div style={{ width: 1, background: "var(--border)", height: 20 }} />
+
+              <button
+                type="button"
                 onClick={() => onModeChange("books")}
                 title="Answer from selected books"
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
@@ -133,7 +158,7 @@ export default function ChatInput({
               <button
                 type="button"
                 onClick={() => onModeChange("history")}
-                title="Answer from chat history"
+                title="Answer from chat discussion"
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
                 style={
                   mode === "history"
@@ -148,7 +173,7 @@ export default function ChatInput({
                 }
               >
                 <MessageSquare size={11} />
-                <span>History</span>
+                <span>Discussion</span>
               </button>
             </div>
 
@@ -160,7 +185,7 @@ export default function ChatInput({
                 className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
                   selectedBookCount > 0
                     ? "border-[var(--accent-2)] bg-[var(--accent-light)] text-[var(--accent-2)] hover:bg-[var(--surface-2)]"
-                    : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] hover:bg-[var(--accent-light)]"
+                    : "border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-light)] animate-pulse ring-2 ring-[var(--accent-light)]"
                 }`}
                 title="Choose books as context"
               >
