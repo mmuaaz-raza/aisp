@@ -33,7 +33,7 @@ def logOut():
     response = responses.JSONResponse(content={"message": "Logged out"})
 
     response.set_cookie(
-        key="archit_auth", value="", max_age=0, httponly=True, samesite="lax"
+        key="archit_auth", value="", max_age=0, httponly=True, secure=True,samesite="none" 
     )
 
     return response
@@ -62,7 +62,7 @@ async def GenerateAuthToken(user,message="Registered successfully"):
         max_age=60 * 60 * 24 * 7,
         httponly=True,
         secure=False,
-        samesite="lax"
+        samesite="none" 
     )
     return response_obj
 

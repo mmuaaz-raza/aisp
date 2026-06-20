@@ -4,7 +4,6 @@ from fastapi import Request , responses, status
 import jwt
 import os
 from pydantic import BaseModel
-import asyncio
 
 class TokenPayload(BaseModel):
     id:str
