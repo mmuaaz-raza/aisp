@@ -7,7 +7,7 @@ from routes import auth
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(lifespan=setup)
-origins = [ "http://localhost:3000",]
+origins = [ "https://ai-archit.vercel.app",]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

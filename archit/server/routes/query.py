@@ -3,6 +3,7 @@ from models.user import User
 from datetime import datetime , timezone
 from models.chat import Chat ,Message
 import asyncio
+from qdrant_client.models import Prefetch, FusionQuery, Fusion
 from dependencies.auth import authenticateUser ,TokenPayload
 from fastapi.responses import JSONResponse
 from beanie import PydanticObjectId
@@ -81,20 +82,32 @@ async def SearchBook(user: Annotated[TokenPayload,Depends(authenticateUser)], re
 
         embedded_query = await asyncio.to_thread(models["embedder"].encode,req.query)
         if len(req.ids) or  req.is_entire_corpus:
-            search_results =await models["qd_client"].query_points(
-                collection_name= "books",
-                query=embedded_query,
-                using="dense",
-                with_payload=True,
-                query_filter=mod.Filter(
-                must=([
-                    mod.FieldCondition(
-                        key="m_id", 
-                        match=mod.MatchAny(any=extracted_ids) 
-                    )
-                ]if not req.is_entire_corpus else [])
-            ),limit=5
-            )
+            search_results = await models["qd_client"].query_points(
+                                        collection_name="books",
+                                        prefetch=[
+                                            Prefetch(
+                                                query=embedded_query.tolist(),
+                                                using="dense",
+                                                limit=20,
+                                            ),
+                                            Prefetch(
+                                                query=mod.Document(text=req.query, model="Qdrant/bm25"),
+                                                using="bm25",
+                                                limit=20,
+                                            ),
+                                        ],
+                                        query=FusionQuery(fusion=Fusion.RRF),
+                                        with_payload=True,
+                                        query_filter=mod.Filter(
+                                            must=([
+                                                mod.FieldCondition(
+                                                    key="m_id",
+                                                    match=mod.MatchAny(any=extracted_ids)
+                                                )
+                                            ] if not req.is_entire_corpus else [])
+                                        ),
+                                        limit=5)
+            
             matched_documents = search_results.points
             for point in matched_documents:
                     title = str(point.payload.get("title", "N/A"))
