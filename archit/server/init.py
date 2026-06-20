@@ -13,15 +13,15 @@ from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
 models = {}
-
 @asynccontextmanager
 async def setup(app: FastAPI):
     load_dotenv()
+    print("==> Starting setup...")
     client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
     try:
+        print("==> Connecting to Qdrant...")
         models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"),api_key=os.getenv("QdrantAPIKEY"))
         if not await models["qd_client"].collection_exists("books"):
-
             await models["qd_client"].create_collection(
                 collection_name="books",
                 vectors_config={
@@ -35,35 +35,32 @@ async def setup(app: FastAPI):
                 },
                 on_disk_payload=True,
             )
-        print("Qdrant setup has been completed")
+        print("==> Qdrant ready")
 
-        
-        
-
+        print("==> Loading embedder...")
         models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
-        print("Embedder is ready!")
+        print("==> Embedder ready")
 
+        print("==> Pinging MongoDB...")
         await client["archit"].command("ping")
         db = client["archit"]
+        print("==> MongoDB connected")
 
         await init_beanie(database=db, document_models=[Doc,Chat,User])
-        print("Connected to MongoDB successfully!")
+        print("==> Beanie ready")
 
-        models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY") )
+        models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        print("==> LLM ready. Setup complete!")
+
     except Exception as e:
-        print(f"unexpected error occured : {e}")
+        print(f"==> ERROR: {e}")
         raise e
-        
 
-
-    yield 
+    yield
 
     await client.close()
-
-    if "llm" in models :
+    if "llm" in models:
         models["llm"].close()
-
-    if "qd_client" in models :
-        await models["qd_client"].close() 
-
+    if "qd_client" in models:
+        await models["qd_client"].close()
     models.clear()
