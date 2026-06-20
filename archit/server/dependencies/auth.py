@@ -18,7 +18,6 @@ async def authenticateUser(req:Request):
         return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"finvalid credentials."})
     try:
         payload_dict= jwt.decode(token,os.getenv("JWT_SECRET"), algorithms=["HS256"])
-
         decoded_payload: TokenPayload = TokenPayload(**payload_dict)
         return decoded_payload
     except jwt.ExpiredSignatureError:

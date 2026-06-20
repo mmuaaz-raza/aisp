@@ -187,9 +187,19 @@ export default function Sidebar({
         </div>
       )}
 
+      {/* Mobile Backdrop */}
+      {!collapsed && (
+        <div 
+          className="md:hidden absolute inset-0 z-40" 
+          style={{ background: "rgba(0,0,0,0.3)" }}
+          onClick={onToggleCollapse} 
+        />
+      )}
+
       <aside
-      className={`flex flex-col h-full border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out shrink-0 ${collapsed ? "w-14" : "w-64"
-        }`}
+      className={`absolute md:relative z-40 flex flex-col h-full border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out shrink-0 ${
+        collapsed ? "-translate-x-full md:translate-x-0 w-64 md:w-14" : "translate-x-0 w-64 md:w-64"
+      }`}
     >
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-3 py-4 border-b border-[var(--border)] min-h-[57px]">

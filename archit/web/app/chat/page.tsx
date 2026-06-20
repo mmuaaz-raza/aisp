@@ -24,6 +24,7 @@ export default function NewChatPage() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+  const [selectedQueryTags, setSelectedQueryTags] = useState<string[]>([]);
   const [mode, setMode] = useState<QueryMode>("library");
 
   const selectedBooks = selectedBookIds
@@ -39,11 +40,19 @@ export default function NewChatPage() {
   }, []);
 
   const handleToggleBook = useCallback((bookId: string) => {
-    setSelectedBookIds((prev) =>
-      prev.includes(bookId)
-        ? prev.filter((id) => id !== bookId)
-        : [...prev, bookId]
-    );
+    setSelectedBookIds((prev) => {
+      const isRemoving = prev.includes(bookId);
+      if (!isRemoving) setSelectedQueryTags([]); // clear tags if adding book
+      return isRemoving ? prev.filter((id) => id !== bookId) : [...prev, bookId];
+    });
+  }, []);
+
+  const handleToggleQueryTag = useCallback((tag: string) => {
+    setSelectedQueryTags((prev) => {
+      const isRemoving = prev.includes(tag);
+      if (!isRemoving) setSelectedBookIds([]); // clear books if adding tag
+      return isRemoving ? prev.filter((t) => t !== tag) : [...prev, tag];
+    });
   }, []);
 
   const handleSend = async () => {
@@ -71,6 +80,7 @@ export default function NewChatPage() {
         query,
         chat_id: chatId,
         is_entire_corpus: mode === "library",
+        tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
       };
       const queryRes = await fetch("/api/v1/chats/c", {
         method: "POST",
@@ -129,6 +139,7 @@ export default function NewChatPage() {
         onLoginClick={() => setLoginModalOpen(true)}
         onLogout={auth.logout}
         chatTitle="New Chat"
+        onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
       />
 
       {/* ── Main content: sidebar + chat ── */}
@@ -146,6 +157,7 @@ export default function NewChatPage() {
           loading={loading}
           streamingContent=""
           selectedBooks={selectedBooks}
+          selectedQueryTags={selectedQueryTags}
           inputValue={inputValue}
           onInputChange={setInputValue}
           onSend={handleSend}
@@ -160,6 +172,8 @@ export default function NewChatPage() {
         onClose={() => setBookPickerOpen(false)}
         selectedIds={selectedBookIds}
         onToggleBook={handleToggleBook}
+        selectedQueryTags={selectedQueryTags}
+        onToggleQueryTag={handleToggleQueryTag}
         onBooksLoaded={registerBooks}
       />
 

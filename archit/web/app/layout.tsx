@@ -14,12 +14,12 @@ export const metadata: Metadata = {
     "A specialized AI for book-specific analysis. Select books and ask targeted questions — this model performs best on precise, content-grounded queries rather than general knowledge.",
   icons: {
     icon: [
-      { url: "/favicon/favicon-96x96.png", sizes: "96x96", type: "image/png" },
-      { url: "/favicon/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-bg/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-bg/favicon.svg", type: "image/svg+xml" },
     ],
-    apple: "/favicon/apple-touch-icon.png",
+    apple: "/favicon-bg/apple-touch-icon.png",
   },
-  manifest: "/favicon/site.webmanifest",
+  manifest: "/favicon-bg/site.webmanifest",
 };
 
 export default function RootLayout({

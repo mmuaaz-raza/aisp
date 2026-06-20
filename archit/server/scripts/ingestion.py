@@ -4,6 +4,7 @@ from models.document import Doc
 from pydantic import BaseModel,Field,HttpUrl
 from utils.processDoc import GutenBurg
 from qdrant_client import models as mod
+
 class BookUrl(BaseModel):
     url : HttpUrl = Field(...)
 
@@ -66,7 +67,8 @@ async def saveChunks(models):
                 for i, c in enumerate(chunks)
             ]
         )
-        
+
+        doc.content = ""
         doc.is_embedded = True
         await doc.save()
         

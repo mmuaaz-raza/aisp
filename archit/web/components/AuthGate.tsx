@@ -49,6 +49,7 @@ export default function AuthGate({ auth }: AuthGateProps) {
   const [email, setEmail] = useState("");           // register only
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const emailRef = useRef<HTMLInputElement>(null);
 
   // Reset fields on tab switch
@@ -58,18 +59,45 @@ export default function AuthGate({ auth }: AuthGateProps) {
     setEmail("");
     setPassword("");
     setShowPw(false);
+    setValidationError("");
     auth.clearError();
     setTimeout(() => emailRef.current?.focus(), 80);
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError("");
+    
     if (tab === "login") {
       if (!identifier.trim() || !password) return;
       await auth.login(identifier.trim(), password);
     } else {
-      if (!name.trim() || !email.trim() || !password) return;
-      await auth.register(name.trim(), email.trim(), password);
+      const n = name.trim();
+      const eMail = email.trim();
+      
+      if (!n || !eMail || !password) return;
+
+      // Validate Name
+      if (n.length < 3 || n.length > 16) {
+        setValidationError("Username must be between 3 and 16 characters.");
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(n)) {
+        setValidationError("Username must be alphanumeric or contain underscores.");
+        return;
+      }
+
+      // Validate Password
+      if (password.length < 8 || password.length > 32) {
+        setValidationError("Password must be between 8 and 32 characters.");
+        return;
+      }
+      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/.test(password)) {
+        setValidationError("Password must contain at least one uppercase letter, one lowercase letter, and one number.");
+        return;
+      }
+
+      await auth.register(n, eMail, password);
     }
   };
 
@@ -113,18 +141,13 @@ export default function AuthGate({ auth }: AuthGateProps) {
       />
 
       {/* ── Content ── */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-6 flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+      <div className="relative z-10 w-full max-w-5xl mx-auto px-6 flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
 
         {/* ── Left: Brand + features ── */}
         <div className="flex-1 text-center lg:text-left">
           {/* Logo */}
           <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
-            <div
-              className="w-11 h-11 rounded-2xl flex items-center justify-center"
-              style={{ background: "var(--accent-light)", border: "1px solid var(--border-light)" }}
-            >
-              <img src="/favicon/favicon.svg" alt="Logo" width={22} height={22} />
-            </div>
+            <img src="/favicon-bg/favicon.svg" alt="Logo" width={44} height={44} className="rounded-2xl" />
             <span className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
               Archit
             </span>
@@ -135,12 +158,12 @@ export default function AuthGate({ auth }: AuthGateProps) {
             <br />
             <span style={{ color: "var(--accent-2)" }}>serious readers.</span>
           </h1>
-          <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-8 max-w-sm mx-auto lg:mx-0">
+          <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-8 max-w-md mx-auto lg:mx-0">
             Select your books, ask precise questions, and get answers grounded in the actual text — not generic knowledge.
           </p>
 
           {/* Features */}
-          <div className="space-y-4 max-w-xs mx-auto lg:mx-0">
+          <div className="space-y-4 max-w-sm mx-auto lg:mx-0">
             {FEATURES.map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
                 <div
@@ -160,7 +183,7 @@ export default function AuthGate({ auth }: AuthGateProps) {
 
         {/* ── Right: Auth card ── */}
         <div
-          className="w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden shrink-0"
+          className="w-full max-w-[400px] rounded-2xl border shadow-2xl overflow-hidden shrink-0"
           style={{
             background: "var(--surface)",
             borderColor: "var(--border)",
@@ -199,7 +222,7 @@ export default function AuthGate({ auth }: AuthGateProps) {
             </div>
 
             {/* Error */}
-            {auth.error && (
+            {(auth.error || validationError) && (
               <div
                 className="text-xs px-3 py-2.5 rounded-lg mb-3"
                 style={{
@@ -208,7 +231,7 @@ export default function AuthGate({ auth }: AuthGateProps) {
                   color: "var(--danger)",
                 }}
               >
-                {auth.error}
+                {auth.error || validationError}
               </div>
             )}
 

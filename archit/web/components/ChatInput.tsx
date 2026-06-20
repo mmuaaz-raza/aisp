@@ -13,6 +13,7 @@ interface ChatInputProps {
   loading: boolean;
   selectedBookCount: number;
   selectedBookTitles: string[];
+  selectedQueryTags: string[];
   mode: QueryMode;
   onModeChange: (mode: QueryMode) => void;
   disabled?: boolean;
@@ -26,6 +27,7 @@ export default function ChatInput({
   loading,
   selectedBookCount,
   selectedBookTitles,
+  selectedQueryTags = [],
   mode,
   onModeChange,
   disabled,
@@ -50,29 +52,32 @@ export default function ChatInput({
     onChange(e.target.value);
   };
 
-  // In history/library mode sending is always allowed (no book requirement)
   const canSend =
     !loading &&
     value.trim().length > 0 &&
-    (mode !== "books" || selectedBookCount > 0);
+    (mode !== "books" || selectedBookCount > 0 || selectedQueryTags.length > 0);
 
-  const bookLabel =
-    selectedBookCount === 0
-      ? "Books"
-      : selectedBookCount === 1
-      ? selectedBookTitles[0].length > 18
+  let bookLabel = "Books/Topics";
+  if (selectedBookCount > 0) {
+    if (selectedBookCount === 1) {
+      bookLabel = selectedBookTitles[0].length > 18
         ? selectedBookTitles[0].slice(0, 18) + "…"
-        : selectedBookTitles[0]
-      : `${selectedBookCount} books`;
+        : selectedBookTitles[0];
+    } else {
+      bookLabel = `${selectedBookCount} books`;
+    }
+  } else if (selectedQueryTags.length > 0) {
+    bookLabel = `${selectedQueryTags.length} topic${selectedQueryTags.length > 1 ? 's' : ''}`;
+  }
 
   const placeholder =
     mode === "history"
       ? "Ask based on this conversation's history…"
       : mode === "library"
       ? "Search across the entire library…"
-      : selectedBookCount === 0
-      ? "Select books first — this model works best on book-specific questions…"
-      : "Ask a specific question about the selected books…";
+      : (selectedBookCount === 0 && selectedQueryTags.length === 0)
+      ? "Select books or topics first…"
+      : "Ask a specific question about the selected context…";
 
   return (
     <div className="px-4 pb-5 pt-2">
@@ -99,10 +104,10 @@ export default function ChatInput({
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-3 pb-2.5 pt-1 gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between px-3 pb-2.5 pt-1 gap-2">
 
           {/* Left: Mode toggle pill + Books picker */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 min-w-0">
             {/* ── Mode toggle pill ── */}
             <div
               className="flex items-center rounded-lg border overflow-hidden shrink-0"
@@ -126,7 +131,7 @@ export default function ChatInput({
                 }
               >
                 <Library size={11} />
-                <span>Library</span>
+                <span className="hidden sm:inline">Library</span>
               </button>
 
               <div style={{ width: 1, background: "var(--border)", height: 20 }} />
@@ -149,7 +154,7 @@ export default function ChatInput({
                 }
               >
                 <BookOpen size={11} />
-                <span>Books</span>
+                <span className="hidden sm:inline">Books</span>
               </button>
 
               {/* divider */}
@@ -173,7 +178,7 @@ export default function ChatInput({
                 }
               >
                 <MessageSquare size={11} />
-                <span>Discussion</span>
+                <span className="hidden sm:inline">Discussion</span>
               </button>
             </div>
 
@@ -183,22 +188,22 @@ export default function ChatInput({
                 onClick={onOpenBooks}
                 type="button"
                 className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                  selectedBookCount > 0
+                  selectedBookCount > 0 || selectedQueryTags.length > 0
                     ? "border-[var(--accent-2)] bg-[var(--accent-light)] text-[var(--accent-2)] hover:bg-[var(--surface-2)]"
                     : "border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-light)] animate-pulse ring-2 ring-[var(--accent-light)]"
                 }`}
-                title="Choose books as context"
+                title="Choose books/topics as context"
               >
-                <span>{bookLabel}</span>
-                {selectedBookCount > 0 && (
+                <span className="truncate max-w-[120px] sm:max-w-[200px]">{bookLabel}</span>
+                {(selectedBookCount > 0 || selectedQueryTags.length > 0) && (
                   <span
-                    className="w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center leading-none"
+                    className="h-4 px-1.5 rounded-full text-[9px] font-bold flex items-center justify-center leading-none"
                     style={{
                       background: "var(--accent)",
                       color: "var(--user-bubble-text)",
                     }}
                   >
-                    {selectedBookCount}
+                    {selectedBookCount + selectedQueryTags.length}
                   </span>
                 )}
               </button>

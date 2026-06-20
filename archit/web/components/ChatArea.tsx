@@ -11,6 +11,7 @@ interface ChatAreaProps {
   loading: boolean;
   streamingContent: string;
   selectedBooks: Book[];
+  selectedQueryTags: string[];
   inputValue: string;
   onInputChange: (val: string) => void;
   onSend: () => void;
@@ -31,6 +32,7 @@ export default function ChatArea({
   loading,
   streamingContent,
   selectedBooks,
+  selectedQueryTags = [],
   inputValue,
   onInputChange,
   onSend,
@@ -52,12 +54,7 @@ export default function ChatArea({
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-0.5">
         {isEmpty && (
           <div className="flex flex-col items-center justify-center h-full gap-6 px-8 text-center">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ background: "var(--accent-light)" }}
-            >
-              <img src="/favicon/favicon.svg" alt="Logo" width={22} height={22} />
-            </div>
+            <img src="/favicon-bg/favicon.svg" alt="Logo" width={48} height={48} className="rounded-2xl shadow-sm" />
             <div className="flex flex-col items-center">
               <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight text-center">
                 {mode === "library"
@@ -131,7 +128,7 @@ export default function ChatArea({
                   borderColor: "var(--border)",
                 }}
               >
-                <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
+                
               </div>
               <div className="text-sm text-[var(--text-primary)] leading-relaxed">
                 <div className="prose">
@@ -150,15 +147,7 @@ export default function ChatArea({
         {loading && !streamingContent && (
           <div className="flex justify-start px-4 py-1">
             <div className="flex items-center gap-2">
-              <div
-                className="shrink-0 w-7 h-7 rounded-full border flex items-center justify-center"
-                style={{
-                  background: "var(--surface-2)",
-                  borderColor: "var(--border)",
-                }}
-              >
-                <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
-              </div>
+              <img src="/favicon-bg/favicon.svg" alt="Logo" width={28} height={28} className="rounded-full shrink-0 border border-[var(--border)]" />
               <div className="flex gap-1 items-center h-7">
                 {[0, 1, 2].map((i) => (
                   <div
@@ -185,6 +174,7 @@ export default function ChatArea({
         loading={loading}
         selectedBookCount={selectedBooks.length}
         selectedBookTitles={selectedBooks.map((b) => b.title)}
+        selectedQueryTags={selectedQueryTags}
         mode={mode}
         onModeChange={onModeChange}
       />

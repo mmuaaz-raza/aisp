@@ -12,6 +12,8 @@ interface BookPickerModalProps {
   onClose: () => void;
   selectedIds: string[];
   onToggleBook: (id: string) => void;
+  selectedQueryTags: string[];
+  onToggleQueryTag: (tag: string) => void;
   onBooksLoaded?: (books: Book[]) => void;
 }
 
@@ -20,6 +22,8 @@ export default function BookPickerModal({
   onClose,
   selectedIds,
   onToggleBook,
+  selectedQueryTags,
+  onToggleQueryTag,
   onBooksLoaded,
 }: BookPickerModalProps) {
   const [books, setBooks] = useState<Book[]>([]);
@@ -32,6 +36,7 @@ export default function BookPickerModal({
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [pickerMode, setPickerMode] = useState<"books" | "tags">("books");
 
   const searchRef = useRef<HTMLInputElement>(null);
   const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,6 +165,15 @@ export default function BookPickerModal({
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
 
+  // Select all books that include a given tag (from currently loaded list)
+  const handleSelectAllByTag = (tag: string) => {
+    const bookIdsWithTag = books
+      .filter((b) => b.tags.includes(tag))
+      .map((b) => b.id)
+      .filter((id) => !selectedIds.includes(id)); // only those not yet selected
+    bookIdsWithTag.forEach((id) => onToggleBook(id));
+  };
+
   // ── Load more (always appends) ────────────────────────────────────────────
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
@@ -216,11 +230,22 @@ export default function BookPickerModal({
                   {selectedIds.length} selected
                 </span>
               )}
+              {selectedQueryTags.length > 0 && (
+                <span
+                  className="text-[10px] rounded-full px-2 py-0.5 font-semibold"
+                  style={{ background: "var(--accent)", color: "var(--user-bubble-text)" }}
+                >
+                  {selectedQueryTags.length} topic{selectedQueryTags.length !== 1 ? "s" : ""}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              {selectedIds.length > 0 && (
+              {(selectedIds.length > 0 || selectedQueryTags.length > 0) && (
                 <button
-                  onClick={() => selectedIds.forEach((id) => onToggleBook(id))}
+                  onClick={() => {
+                    selectedIds.forEach((id) => onToggleBook(id));
+                    selectedQueryTags.forEach((tag) => onToggleQueryTag(tag));
+                  }}
                   className="text-[11px] px-2.5 py-1.5 rounded-md transition-colors cursor-pointer text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--surface-2)]"
                 >
                   Clear all
@@ -235,11 +260,38 @@ export default function BookPickerModal({
             </div>
           </div>
 
-          {/* Search + Tag filters */}
-          <div
-            className="px-5 py-3 border-b shrink-0 flex flex-col gap-2.5"
-            style={{ borderColor: "var(--border)" }}
-          >
+          {/* Mode Switcher */}
+          <div className="flex border-b shrink-0 px-5 pt-2 gap-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <button
+              onClick={() => setPickerMode("books")}
+              className="pb-2 text-sm font-medium transition-colors border-b-2"
+              style={{
+                color: pickerMode === "books" ? "var(--text-primary)" : "var(--text-muted)",
+                borderColor: pickerMode === "books" ? "var(--accent)" : "transparent",
+              }}
+            >
+              Search Books
+            </button>
+            <button
+              onClick={() => setPickerMode("tags")}
+              className="pb-2 text-sm font-medium transition-colors border-b-2"
+              style={{
+                color: pickerMode === "tags" ? "var(--text-primary)" : "var(--text-muted)",
+                borderColor: pickerMode === "tags" ? "var(--accent)" : "transparent",
+              }}
+            >
+              Select by Topics
+            </button>
+          </div>
+
+          {/* ── MODE: BOOKS ── */}
+          {pickerMode === "books" && (
+            <>
+              {/* Search + Tag filters */}
+              <div
+                className="px-5 py-3 border-b shrink-0 flex flex-col gap-2.5"
+                style={{ borderColor: "var(--border)" }}
+              >
             {/* Text search */}
             <div className="relative">
               {loading && query ? (
@@ -290,35 +342,43 @@ export default function BookPickerModal({
                 <Tag size={11} className="text-[var(--text-muted)] shrink-0" />
                 {availableTags.map((tag) => {
                   const active = selectedTags.includes(tag);
+                  const tagBookCount = books.filter((b) => b.tags.includes(tag)).length;
+                  const allSelected =
+                    tagBookCount > 0 &&
+                    books.filter((b) => b.tags.includes(tag)).every((b) => selectedIds.includes(b.id));
                   return (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      className="text-[11px] px-2 py-0.5 rounded-full border transition-all cursor-pointer"
-                      style={
-                        active
-                          ? {
-                              background: "var(--accent)",
-                              color: "var(--user-bubble-text)",
-                              borderColor: "var(--accent)",
-                            }
-                          : {
-                              background: "transparent",
-                              color: "var(--text-muted)",
-                              borderColor: "var(--border)",
-                            }
+                    <div key={tag} className="flex items-center rounded-full border overflow-hidden transition-all"
+                      style={active
+                        ? { borderColor: "var(--accent)", background: "var(--accent)" }
+                        : { borderColor: "var(--border)", background: "transparent" }
                       }
                     >
-                      {tag}
-                    </button>
+                      {/* Tag name — toggles filter */}
+                      <button
+                        onClick={() => toggleTag(tag)}
+                        className="text-[11px] px-2.5 py-0.5 cursor-pointer transition-colors w-full text-left"
+                        style={active
+                          ? { color: "var(--user-bubble-text)" }
+                          : { color: "var(--text-muted)" }
+                        }
+                      >
+                        {tag}
+                        {tagBookCount > 0 && (
+                          <span className="ml-1 opacity-70">({tagBookCount})</span>
+                        )}
+                      </button>
+                    </div>
                   );
                 })}
                 {selectedTags.length > 0 && (
                   <button
-                    onClick={() => setSelectedTags([])}
+                    onClick={() => {
+                      setSelectedTags([]);
+                      // Could also clear query tags, but let's keep it just visual tag filtering.
+                    }}
                     className="text-[11px] text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer ml-1"
                   >
-                    clear tags
+                    clear topics
                   </button>
                 )}
               </div>
@@ -387,37 +447,75 @@ export default function BookPickerModal({
                   ))}
                 </div>
 
-                {/* Load more — only shown when no active filter OR filter matched server results */}
-                {hasMore && displayBooks.length === books.length && (
-                  <div className="flex justify-center mt-6">
+                {/* Load more sentinel */}
+                {hasMore && !loading && !error && (
+                  <div className="flex justify-center p-4">
                     <button
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="flex items-center gap-2 text-sm px-5 py-2.5 rounded-xl border transition-all cursor-pointer disabled:opacity-60"
-                      style={{
-                        borderColor: "var(--border)",
-                        color: "var(--text-muted)",
-                        background: "var(--surface-2)",
-                      }}
+                      className="px-4 py-2 rounded-xl text-sm font-medium border transition-colors hover:bg-[var(--surface-2)] disabled:opacity-50"
+                      style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
                     >
                       {loadingMore ? (
-                        <Loader2 size={14} className="animate-spin" />
+                        <div className="flex items-center gap-2">
+                          <Loader2 size={14} className="animate-spin" />
+                          Loading…
+                        </div>
                       ) : (
-                        <ChevronDown size={14} />
+                        "Load More"
                       )}
-                      {loadingMore ? "Loading…" : "Load more"}
                     </button>
                   </div>
                 )}
-
-                {!hasMore && (
-                  <p className="text-center text-[11px] text-[var(--text-muted)] mt-6">
-                    {displayBooks.length} book{displayBooks.length !== 1 ? "s" : ""} shown
-                  </p>
-                )}
+                
+                <p className="text-center text-[11px] text-[var(--text-muted)] mt-6">
+                  {displayBooks.length} book{displayBooks.length !== 1 ? "s" : ""} shown
+                </p>
               </>
             )}
           </div>
+          </>
+          )}
+
+          {/* ── MODE: TAGS ── */}
+          {pickerMode === "tags" && (
+            <div className="flex-1 overflow-y-auto p-5">
+              <p className="text-sm text-[var(--text-muted)] mb-4">
+                Select one or more topics to use all books within those topics as context.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const active = selectedQueryTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => onToggleQueryTag(tag)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-medium transition-all cursor-pointer"
+                      style={
+                        active
+                          ? {
+                              background: "var(--accent)",
+                              color: "var(--user-bubble-text)",
+                              borderColor: "var(--accent)",
+                            }
+                          : {
+                              background: "transparent",
+                              color: "var(--text-muted)",
+                              borderColor: "var(--border)",
+                            }
+                      }
+                    >
+                      {active && <Check size={14} />}
+                      {tag}
+                    </button>
+                  );
+                })}
+                {availableTags.length === 0 && (
+                  <p className="text-sm text-[var(--text-muted)]">No topics available.</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div

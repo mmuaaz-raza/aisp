@@ -1,4 +1,5 @@
 from fastapi import APIRouter,Depends, responses ,Response,HTTPException, status ,Body
+import time
 from datetime import datetime, timedelta, timezone
 from beanie import PydanticObjectId
 import jwt
@@ -8,7 +9,6 @@ from models.user import User
 import bcrypt
 import os
 from pydantic import BaseModel,Field,EmailStr,ConfigDict
-import asyncio
 from dependencies.auth import authenticateUser,TokenPayload
 
 router = APIRouter(prefix="/auth")
@@ -71,7 +71,7 @@ async def Register(user:Annotated[dict,Depends(authenticateUser)],register:Annot
     if isinstance(user,TokenPayload):
         return responses.JSONResponse(status_code=status.HTTP_403_FORBIDDEN,content={"message":"signed in already"})
     password_bytes = register.password.encode("utf-8")
-    salt = bcrypt.gensalt(18)
+    salt = bcrypt.gensalt(12)
     encrpyted_pass = bcrypt.hashpw(password=password_bytes,salt=salt)
     encrpyted_pass = encrpyted_pass.decode("utf-8")
     try :
@@ -117,10 +117,10 @@ async def Login(dtoken:Annotated[dict,Depends(authenticateUser)],loginp:Annotate
 
     if not user:
         return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"Password or Username/Email is not correct"})
-    
+    st = time.perf_counter()    
     encoded_pass = user.password.encode("utf-8")
     is_valid = bcrypt.checkpw(hashed_password=encoded_pass,password=loginp.password.encode("utf-8"))
-
+    print(f"time taken : {time.perf_counter()-st}")
     if not is_valid:
         return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"Password or Username/Email is not correct"})
     

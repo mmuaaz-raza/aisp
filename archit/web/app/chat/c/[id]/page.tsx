@@ -8,6 +8,7 @@ import ChatArea from "@/components/ChatArea";
 import BookPickerModal from "@/components/BookPickerModal";
 import LoginModal from "@/components/LoginModal";
 import Header from "@/components/Header";
+import SummaryModal from "@/components/SummaryModal";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/lib/useAuth";
 import { Sparkles } from "lucide-react";
@@ -43,7 +44,11 @@ export default function ChatConversationPage({
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+  const [selectedQueryTags, setSelectedQueryTags] = useState<string[]>([]);
   const [mode, setMode] = useState<QueryMode>("library");
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
 
   // ── Fetch chat on mount ───────────────────────────────────────────────────
   useEffect(() => {
@@ -57,6 +62,10 @@ export default function ChatConversationPage({
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
         setChat({ ...data, selectedBookIds: [] });
+        // Seed summary text if the backend already has one
+        if (data.summary && data.summary.trim().length > 0) {
+          setSummaryText(data.summary);
+        }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         setFetchError(
@@ -85,9 +94,19 @@ export default function ChatConversationPage({
   }, []);
 
   const handleToggleBook = useCallback((bookId: string) => {
-    setSelectedBookIds((prev) =>
-      prev.includes(bookId) ? prev.filter((id) => id !== bookId) : [...prev, bookId]
-    );
+    setSelectedBookIds((prev) => {
+      const isRemoving = prev.includes(bookId);
+      if (!isRemoving) setSelectedQueryTags([]); // clear tags if adding book
+      return isRemoving ? prev.filter((id) => id !== bookId) : [...prev, bookId];
+    });
+  }, []);
+
+  const handleToggleQueryTag = useCallback((tag: string) => {
+    setSelectedQueryTags((prev) => {
+      const isRemoving = prev.includes(tag);
+      if (!isRemoving) setSelectedBookIds([]); // clear books if adding tag
+      return isRemoving ? prev.filter((t) => t !== tag) : [...prev, tag];
+    });
   }, []);
 
   const handleSend = async () => {
@@ -113,6 +132,7 @@ export default function ChatConversationPage({
       query,
       chat_id: chatId,
       is_entire_corpus: mode === "library",
+      tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
     };
 
     try {
@@ -159,6 +179,25 @@ export default function ChatConversationPage({
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (summarizing || !chat) return;
+    setSummarizing(true);
+    try {
+      const res = await fetch(`/api/v1/chats/summary/${chatId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      setSummaryText(data.summary ?? null);
+      setSummaryOpen(true);
+    } catch (err) {
+      console.error("Summary failed:", err);
+    } finally {
+      setSummarizing(false);
     }
   };
 
@@ -271,6 +310,12 @@ export default function ChatConversationPage({
         onLoginClick={() => setLoginModalOpen(true)}
         onLogout={auth.logout}
         chatTitle={chat?.title}
+        onSummarize={displayMessages.length > 0 ? () => {
+          // If already fetched, just open; otherwise fetch it
+          if (summaryText) { setSummaryOpen(true); } else { handleSummarize(); }
+        } : undefined}
+        summarizing={summarizing}
+        onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
       />
 
       {/* ── Main content: sidebar + chat ── */}
@@ -288,6 +333,7 @@ export default function ChatConversationPage({
           loading={loading}
           streamingContent=""
           selectedBooks={selectedBooks}
+          selectedQueryTags={selectedQueryTags}
           inputValue={inputValue}
           onInputChange={setInputValue}
           onSend={handleSend}
@@ -297,11 +343,21 @@ export default function ChatConversationPage({
         />
       </div>
 
+      <SummaryModal
+        open={summaryOpen}
+        summary={summaryText}
+        onClose={() => setSummaryOpen(false)}
+        onRegenerate={handleSummarize}
+        regenerating={summarizing}
+      />
+
       <BookPickerModal
         open={bookPickerOpen}
         onClose={() => setBookPickerOpen(false)}
         selectedIds={selectedBookIds}
         onToggleBook={handleToggleBook}
+        selectedQueryTags={selectedQueryTags}
+        onToggleQueryTag={handleToggleQueryTag}
         onBooksLoaded={registerBooks}
       />
 

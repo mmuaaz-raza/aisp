@@ -83,10 +83,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   if (isUser) {
     return (
       <div className="flex justify-end group px-4 py-1 animate-message">
-        <div className="flex items-end gap-2 max-w-[75%]">
-          <span className="text-[10px] text-[var(--text-muted)] self-end mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {formatTime(message.timestamp)}
-          </span>
+        <div className="flex flex-col items-end gap-0.5 max-w-[75%]">
           <div
             className="text-sm px-4 py-2.5 rounded-2xl rounded-br-sm leading-relaxed shadow-sm"
             style={{
@@ -96,9 +93,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           >
             {parseUserQuery(message.content)}
           </div>
-          <div className="shrink-0 w-7 h-7 rounded-full bg-[var(--accent-light)] border border-[var(--border)] flex items-center justify-center self-end">
-            <User size={13} className="text-[var(--accent-2)]" />
-          </div>
+          <span className="text-[10px] text-[var(--text-muted)] pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {formatTime(message.timestamp)}
+          </span>
         </div>
       </div>
     );
@@ -107,9 +104,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div className="flex justify-start group px-4 py-1 animate-message">
       <div className="flex items-end gap-2 max-w-[80%]">
-        <div className="shrink-0 w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center self-start mt-1">
-          <img src="/favicon/favicon.svg" alt="Logo" width={13} height={13} />
-        </div>
+        <img src="/favicon-bg/favicon.svg" alt="Archit Avatar" width={28} height={28} className="rounded-full shrink-0 self-start mt-1 border border-[var(--border)]" />
         <div className="flex flex-col gap-1 w-full">
           <div className="text-sm text-[var(--text-primary)] leading-relaxed">
             <div className="prose">

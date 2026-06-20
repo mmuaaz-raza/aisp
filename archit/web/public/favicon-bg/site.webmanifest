@@ -1,5 +1,5 @@
 {
-  "name": "Archit - AI Library",
+  "name": "Archit -AI Library",
   "short_name": "Archit",
   "icons": [
     {
@@ -15,7 +15,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#F7F1DE",
-  "background_color": "#F7F1DE",
+  "theme_color": "#f7f1de",
+  "background_color": "#f7f1de",
   "display": "standalone"
 }

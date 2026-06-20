@@ -54,7 +54,7 @@ async def getMyChats(id:Annotated[PydanticObjectId,Path()],user:Annotated[TokenP
         chat = await Chat.find_one({"userId.$id": PydanticObjectId(user.id),"_id":id})
         if not chat : 
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND,content={"message":"invalid chat id"} )
-        return JSONResponse(status_code=status.HTTP_200_OK,content=chat.model_dump(mode="json",exclude={"summary"}) )
+        return JSONResponse(status_code=status.HTTP_200_OK,content=chat.model_dump(mode="json") )
     except Exception as e:
         return JSONResponse(status_code=status.HTTP_501_NOT_IMPLEMENTED,content={"error":f"internal server error: {str(e)}"})
 

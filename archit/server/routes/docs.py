@@ -17,7 +17,7 @@ async def listAllBooks(name:Annotated[str,Query()]="",tags:Annotated[List[str],Q
     if tags : 
         filters["tags"] = tags
     
-    perPage=3
+    perPage=10
     docs =await Doc.find(Doc.is_embedded==True,filters).skip(page*perPage).limit(perPage).to_list()
     total = await Doc.count()
     return JSONResponse(status_code=status.HTTP_200_OK,content={"books":[doc.model_dump(mode="json",exclude={"content","is_embedded"} )for doc in docs],"total":total,"ftotal":len(docs)})
@@ -34,7 +34,6 @@ async def GetBook(id:PydanticObjectId):
 
 @router.get("/tags")
 async def listAllTags():    
-
     docs = await Doc.all().to_list()
     tags = {tag for doc in docs for tag in doc.tags}
     return JSONResponse(status_code=status.HTTP_200_OK,content={"tags":list(tags)})
