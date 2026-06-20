@@ -1,4 +1,5 @@
 import uuid
+from chonkie import SemanticChunker
 import aiohttp
 from models.document import Doc
 from pydantic import BaseModel,Field,HttpUrl
@@ -42,6 +43,14 @@ async def DownloadContent(body:BookUrl)->bool:
 
 async def saveChunks(models):
     docs =await Doc.find(Doc.is_embedded==False).to_list()
+    models["chunker"] = SemanticChunker( 
+        embedding_model="minishlab/potion-base-32M",       
+        threshold=0.4,
+        similarity_window=3, 
+        min_sentences_per_chunk=3,
+        min_characters_per_sentence=40,
+        chunk_size=512
+        )
 
     for doc in docs:
         chunks = models["chunker"].chunk(doc.content)

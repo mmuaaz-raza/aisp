@@ -1,7 +1,5 @@
 from contextlib import asynccontextmanager
-from scripts.ingestion import saveChunks
 from groq import Groq
-from chonkie import SemanticChunker
 from models.user import User
 from sentence_transformers import SentenceTransformer
 from fastapi import FastAPI
@@ -15,12 +13,13 @@ from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
 models = {}
+
 @asynccontextmanager
 async def setup(app: FastAPI):
     load_dotenv()
     client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
     try:
-        models["qd_client"] = AsyncQdrantClient(url="http://localhost:6333/")
+        models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"),api_key=os.getenv("QdrantAPIKEY"))
         if not await models["qd_client"].collection_exists("books"):
 
             await models["qd_client"].create_collection(
@@ -38,17 +37,10 @@ async def setup(app: FastAPI):
             )
         print("Qdrant setup has been completed")
 
-        models["chunker"] = SemanticChunker( 
-        embedding_model="minishlab/potion-base-32M",       
-        threshold=0.4,
-        similarity_window=3, 
-        min_sentences_per_chunk=3,
-        min_characters_per_sentence=40,
-        chunk_size=512
-        )
-        print("Chunker is ready!")
+        
+        
 
-        models["embedder"] = SentenceTransformer("all-MiniLM-L6-v2")
+        models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
         print("Embedder is ready!")
 
         await client["archit"].command("ping")

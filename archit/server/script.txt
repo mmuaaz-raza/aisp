@@ -1,0 +1,622 @@
+from contextlib import asynccontextmanager
+from groq import Groq
+from models.user import User
+from sentence_transformers import SentenceTransformer
+from fastapi import FastAPI
+import os
+from beanie import init_beanie
+from fastapi import FastAPI
+from pymongo import AsyncMongoClient
+from models.document import Doc
+from models.chat import Chat
+from dotenv import load_dotenv
+from qdrant_client import AsyncQdrantClient
+from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
+models = {}
+
+@asynccontextmanager
+async def setup(app: FastAPI):
+    load_dotenv()
+    client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
+    try:
+        models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"),api_key=os.getenv("QdrantAPIKEY"))
+        if not await models["qd_client"].collection_exists("books"):
+
+            await models["qd_client"].create_collection(
+                collection_name="books",
+                vectors_config={
+                    "dense":VectorParams(
+                size=384,   
+                distance = Distance.COSINE)},
+                sparse_vectors_config={
+                    "bm25":SparseVectorParams(
+                        modifier=Modifier.IDF,
+                    ) 
+                },
+                on_disk_payload=True,
+            )
+        print("Qdrant setup has been completed")
+
+        
+        
+
+        models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        print("Embedder is ready!")
+
+        await client["archit"].command("ping")
+        db = client["archit"]
+
+        await init_beanie(database=db, document_models=[Doc,Chat,User])
+        print("Connected to MongoDB successfully!")
+
+        models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY") )
+    except Exception as e:
+        print(f"unexpected error occured : {e}")
+        raise e
+        
+
+
+    yield 
+
+    await client.close()
+
+    if "llm" in models :
+        models["llm"].close()
+
+    if "qd_client" in models :
+        await models["qd_client"].close() 
+
+    models.clear()from fastapi import APIRouter,Depends, responses ,Response,HTTPException, status ,Body
+import time
+from datetime import datetime, timedelta, timezone
+from beanie import PydanticObjectId
+import jwt
+from pymongo.errors import DuplicateKeyError
+from typing import Annotated
+from models.user import User
+import bcrypt
+import os
+from pydantic import BaseModel,Field,EmailStr,ConfigDict
+from dependencies.auth import authenticateUser,TokenPayload
+
+router = APIRouter(prefix="/auth")
+
+
+
+@router.get("/")
+async def getMe(req:Annotated[TokenPayload,Depends(authenticateUser)]):
+    if isinstance(req,Response):
+        return req
+    
+    cuser =await User.get(PydanticObjectId(req.id))
+    if not cuser:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"invalid credentials"})
+    return responses.JSONResponse(status_code=status.HTTP_200_OK,content=cuser.model_dump(mode="json",exclude={"password"}))
+
+
+
+
+@router.post("/logout")
+def logOut():
+    response = responses.JSONResponse(content={"message": "Logged out"})
+
+    response.set_cookie(
+        key="archit_auth", value="", max_age=0, httponly=True, samesite="lax"
+    )
+
+    return response
+
+
+class RegisterPayload(BaseModel):
+    model_config = ConfigDict(regex_engine="python-re")
+    name:str =Field(...,min_length=3,max_length=16,pattern=r"^[a-zA-Z0-9_]+$",description="Username must be alphanumeric or contain underscores.",)
+    password :str =  Field(...,min_length=8,
+        max_length=32,
+        pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$",
+        description="Password must contain at least one uppercase letter, one lowercase letter, and one number.",)
+    email : EmailStr
+
+async def GenerateAuthToken(user,message="Registered successfully"):
+    token :TokenPayload = TokenPayload(id=str(user["id"]),name=user["name"],exp=int((datetime.now(timezone.utc) + timedelta(days=7)).timestamp()))
+    jwt_token =jwt.encode(token.model_dump(mode="python"),os.getenv("JWT_SECRET"),algorithm="HS256")
+
+    response_obj = responses.JSONResponse(
+    content={"message": message},
+    status_code=status.HTTP_200_OK,
+    )
+    response_obj.set_cookie(
+        key="archit_auth",
+        value=jwt_token,
+        max_age=60 * 60 * 24 * 7,
+        httponly=True,
+        secure=False,
+        samesite="lax"
+    )
+    return response_obj
+
+@router.post("/register")
+async def Register(user:Annotated[dict,Depends(authenticateUser)],register:Annotated[RegisterPayload,Body()]):
+    if isinstance(user,TokenPayload):
+        return responses.JSONResponse(status_code=status.HTTP_403_FORBIDDEN,content={"message":"signed in already"})
+    password_bytes = register.password.encode("utf-8")
+    salt = bcrypt.gensalt(12)
+    encrpyted_pass = bcrypt.hashpw(password=password_bytes,salt=salt)
+    encrpyted_pass = encrpyted_pass.decode("utf-8")
+    try :
+
+        new_user = User(name=register.name,password=encrpyted_pass,email=register.email)
+        await new_user.save()
+    except DuplicateKeyError as e:
+            # Check which field violated the unique constraint
+            error_msg = "Username or Email already exists"
+            if "email" in str(e):
+                error_msg = "Email is already registered"
+            elif "name" in str(e):
+                error_msg = "Username is already taken"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
+            )
+
+    return await GenerateAuthToken(new_user.model_dump())
+
+
+class LoginPayload(BaseModel):
+    model_config = ConfigDict(regex_engine="python-re")
+    name:str 
+    password :str =  Field(...,min_length=8,
+        max_length=32,
+        pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$",
+        description="Password must contain at least one uppercase letter, one lowercase letter, and one number.",)
+
+@router.post("/login")
+async def Login(dtoken:Annotated[dict,Depends(authenticateUser)],loginp:Annotated[LoginPayload,Body()]):
+
+    if isinstance(dtoken,TokenPayload):
+        return responses.JSONResponse(status_code=status.HTTP_202_ACCEPTED,content={"message":"signed in already"})
+    
+    filters = {
+        "$or": [
+        {"name": loginp.name},
+        {"email": loginp.name}
+    ]
+    }
+
+    user = await User.find_one(filters)
+
+    if not user:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"Password or Username/Email is not correct"})
+    st = time.perf_counter()    
+    encoded_pass = user.password.encode("utf-8")
+    is_valid = bcrypt.checkpw(hashed_password=encoded_pass,password=loginp.password.encode("utf-8"))
+    print(f"time taken : {time.perf_counter()-st}")
+    if not is_valid:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"Password or Username/Email is not correct"})
+    
+      
+    return await GenerateAuthToken(user.model_dump(),"Logined successfully")from fastapi import APIRouter ,status ,Query
+from fastapi.responses import JSONResponse
+from models.document import Doc
+from typing import Annotated ,List
+from beanie import PydanticObjectId
+import re
+router = APIRouter(prefix="/books")
+
+
+@router.get("/")
+async def listAllBooks(name:Annotated[str,Query()]="",tags:Annotated[List[str],Query()]=[],page:Annotated[int,Query()]=0):
+    filters = {}
+    if name :
+        words = name.split(" ")
+        regex_pattern = "|".join([re.escape(word) for word in words])
+        filters["title"] = {"$regex": regex_pattern, "$options": "i"}
+    if tags : 
+        filters["tags"] = tags
+    
+    perPage=10
+    docs =await Doc.find(Doc.is_embedded==True,filters).skip(page*perPage).limit(perPage).to_list()
+    total = await Doc.count()
+    return JSONResponse(status_code=status.HTTP_200_OK,content={"books":[doc.model_dump(mode="json",exclude={"content","is_embedded"} )for doc in docs],"total":total,"ftotal":len(docs)})
+
+
+@router.get("{id}")
+async def GetBook(id:PydanticObjectId):
+    doc =await Doc.get(id)
+    if not doc or not doc.is_embedded :
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND,content="")
+    return JSONResponse(status_code=status.HTTP_200_OK,content=doc.model_dump(mode="json",exclude={"content","is_embedded"} ))
+
+
+
+@router.get("/tags")
+async def listAllTags():    
+    docs = await Doc.all().to_list()
+    tags = {tag for doc in docs for tag in doc.tags}
+    return JSONResponse(status_code=status.HTTP_200_OK,content={"tags":list(tags)})from fastapi import APIRouter,status,Depends,responses,Path,HTTPException
+from models.user import User
+from datetime import datetime , timezone
+from models.chat import Chat ,Message
+import asyncio
+from dependencies.auth import authenticateUser ,TokenPayload
+from fastapi.responses import JSONResponse
+from beanie import PydanticObjectId
+from typing import List,Annotated,cast
+from models.document import Doc
+from pydantic import BaseModel
+from init import models
+from beanie import PydanticObjectId
+from qdrant_client import models as mod
+
+router = APIRouter(prefix="/chats")
+
+class SearchRequest(BaseModel):
+    ids : List[PydanticObjectId] = []
+    query : str
+    chat_id : PydanticObjectId 
+    tags : List[str] = []
+    is_entire_corpus : bool = False
+
+class RelevantDocumets(BaseModel):
+    token : int
+    text: str
+    title : str
+
+
+def generatePrompt(query:str,documents:List[RelevantDocumets]):
+    context_text = ""
+    for idx,e in enumerate(documents) :
+        context_text += f"\n--- Excerpt {idx + 1} ---\n"
+        context_text += f"Source BOOK TITLE: {e.title}\n"
+        context_text += f"Content: {e.text}\n"
+        context_text += f"Tokens (current chunk): {str(e.token)}\n"
+
+    prompt = f"""
+
+    <context>
+    {context_text}
+    </context>
+
+    <query> {query} </query>
+
+    """
+
+    return prompt
+
+
+
+
+@router.post("/c")
+async def SearchBook(user: Annotated[TokenPayload,Depends(authenticateUser)], req:SearchRequest):
+    try : 
+        if isinstance(user,responses.Response):
+            return user
+        
+        cid = req.chat_id
+        cuser  = await User.get(PydanticObjectId(user.id))
+        if not cuser : 
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail={"message":"invalid chat id"})
+        
+        current_chat = await Chat.find_one({"userId.$id": PydanticObjectId(user.id),"_id":cid})
+        if not current_chat:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail={"message":"invalid chat id"})
+        if current_chat.is_exhausted:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED,detail={"message":"Token limit for this chat has been exceeded"})
+
+        if len(current_chat.messages) == 1:
+            splitted = req.query.strip().split(" ")
+            current_chat.title = " ".join(splitted[:min(len(splitted),30)])
+
+        Responses = []
+        extracted_ids = [str(id) for id in req.ids]
+
+        if len(req.tags):
+            docs = await Doc.find({"tags":{"$in":req.tags}}).to_list()
+            extracted_ids = [str(doc.id) for doc in docs]
+
+        embedded_query = await asyncio.to_thread(models["embedder"].encode,req.query)
+        if len(req.ids) or  req.is_entire_corpus:
+            search_results =await models["qd_client"].query_points(
+                collection_name= "books",
+                query=embedded_query,
+                using="dense",
+                with_payload=True,
+                query_filter=mod.Filter(
+                must=([
+                    mod.FieldCondition(
+                        key="m_id", 
+                        match=mod.MatchAny(any=extracted_ids) 
+                    )
+                ]if not req.is_entire_corpus else [])
+            ),limit=5
+            )
+            matched_documents = search_results.points
+            for point in matched_documents:
+                    title = str(point.payload.get("title", "N/A"))
+                    Responses.append(RelevantDocumets(text=point.payload["text"],title=title,token=point.payload["token_count"]))
+
+        prompt = generatePrompt(req.query,Responses)
+        current_chat.tokens_used += int(len(prompt)/4 + 20)
+
+        if(current_chat.tokens_used + 120 >= current_chat.token_limit) :
+            current_chat.is_exhausted = True
+            await current_chat.save()
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED,detail={"message":"Token limit for this chat has been reached"})
+        
+        current_chat.messages.append(Message(role= "user",content= prompt,timestamp=datetime.now(timezone.utc)))
+        response = models["llm"].chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role":e.role,"content":e.content} for e in current_chat.messages],
+            temperature=0.4
+        )
+
+        llm_response = response.choices[0].message.content
+
+        current_chat.messages.append(Message(role="assistant",content=llm_response,timestamp=datetime.now(timezone.utc)))
+        current_chat.tokens_used += int(len(llm_response)/4)
+
+        await current_chat.save()
+
+        return JSONResponse(status_code=status.HTTP_200_OK,content={"response":llm_response})
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail={"message":"internal server error"})
+
+
+def generateSummaryCommand():
+    prompt = f"""
+    You are a conversation summarizer. When given a chat history between a user and an assistant, produce a concise summary that captures:
+
+    1. The user's original goal or question
+    2. Key decisions, answers, or solutions reached
+    3. Any important context, constraints, or preferences the user mentioned
+    4. Unresolved questions or next steps, if any
+
+    Rules:
+    - Be factual — do not infer intent beyond what was stated
+    - Omit filler exchanges (greetings, acknowledgments)
+    - Keep it under 250 words unless the conversation is long and complex
+    - Output plain prose, no bullet points
+
+    
+    """
+    return prompt
+
+@router.post("/summary/{cid}")
+async def GenerateSummary(user: Annotated[TokenPayload,Depends(authenticateUser)],cid:PydanticObjectId):
+    try : 
+        if isinstance(user,responses.Response):
+            return user
+
+        cuser  = await User.get(PydanticObjectId(user.id))
+        if not cuser : 
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail={"message":"invalid chat id"})
+        
+        current_chat = await Chat.find_one({"userId.$id": PydanticObjectId(user.id),"_id":cid})
+        if not current_chat:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail={"message":"invalid chat id"})
+        if current_chat.is_exhausted and len(current_chat.summary):
+            return JSONResponse(status_code=status.HTTP_202_ACCEPTED,content={"summary":current_chat.summary})
+        
+
+        response = models["llm"].chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                 {"role": "system", "content": generateSummaryCommand()},
+                 {"role":"user","content":f"Summarize this conversation:\n\n{"\n".join([f"<{msg.role}>: <{msg.content}>" for msg in current_chat.messages])}"}],
+            temperature=0.5
+        )
+        llm_response = response.choices[0].message.content
+        current_chat.summary = llm_response
+
+        await current_chat.save()
+
+        return JSONResponse(status_code=status.HTTP_201_CREATED,content={"summary":current_chat.summary})
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail={"message":"internal server error"})from models.user import User
+from beanie import PydanticObjectId
+from fastapi import APIRouter,Path,status,Depends ,HTTPException,Body
+from fastapi.responses import JSONResponse ,Response 
+from typing import Annotated , cast 
+from models.chat import Chat ,Message
+from beanie import PydanticObjectId ,Link
+from dependencies.auth import authenticateUser ,TokenPayload
+router = APIRouter(prefix="/chats")
+
+@router.get("/")
+async def allChats(user:Annotated[TokenPayload,Depends(authenticateUser)]):
+    try :
+        if isinstance(user,Response):
+            return user
+        cuser = await User.get(PydanticObjectId(user.id))
+        if not cuser:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail={"message":"invalid credentials"})
+        
+        chats = await Chat.find({"userId.$id": cuser.id}).to_list()
+
+        return JSONResponse(status_code=status.HTTP_201_CREATED,content=[chat.model_dump(mode="json",exclude={"messages","summary"})for chat in chats])
+    
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_501_NOT_IMPLEMENTED,content={"error":f"could not be proceeded : {str(e)}"})
+
+
+
+@router.post("/")
+async def newChat(user:Annotated[TokenPayload,Depends(authenticateUser)],query:Annotated[str,Body(embed=True)]):
+    try :
+        if isinstance(user,Response):
+            return user
+        cuser = await User.get(PydanticObjectId(user.id))
+        if not cuser :
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail={"message":"invalid credentials."})
+
+        splitted = query.strip().split(" ")
+        new_chat  = Chat(userId=cast(Link[User], cuser),title=" ".join(splitted[:min(len(splitted),30)]))
+        await new_chat.save()
+        return JSONResponse(status_code=status.HTTP_201_CREATED,content=new_chat.model_dump(mode="json"))
+   
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_501_NOT_IMPLEMENTED,content={"error":f"could not be proceeded : {str(e)}"})
+
+
+
+
+
+
+@router.get("/{id}")
+async def getMyChats(id:Annotated[PydanticObjectId,Path()],user:Annotated[TokenPayload,Depends(authenticateUser)]):
+    try :
+        chat = await Chat.find_one({"userId.$id": PydanticObjectId(user.id),"_id":id})
+        if not chat : 
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND,content={"message":"invalid chat id"} )
+        return JSONResponse(status_code=status.HTTP_200_OK,content=chat.model_dump(mode="json") )
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_501_NOT_IMPLEMENTED,content={"error":f"internal server error: {str(e)}"})
+
+
+
+@router.delete("/{id}")
+async def deleteChat(user:Annotated[TokenPayload,Depends(authenticateUser)],id:PydanticObjectId):
+    try :
+        if isinstance(user,Response):
+            return user
+        cuser = await User.get(PydanticObjectId(user.id))
+        chat = await Chat.find_one({"userId.$id": PydanticObjectId(user.id),"_id":id})
+        if not cuser or not chat:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail={"message":"chat not found."})
+        await chat.delete()
+        return JSONResponse(status_code=status.HTTP_201_CREATED,content={"message":"chat has been deleted"})
+   
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_501_NOT_IMPLEMENTED,content={"error":f"could not be proceeded : {str(e)}"})
+
+from fastapi import Request , responses, status 
+import jwt
+import os
+from pydantic import BaseModel
+import asyncio
+
+class TokenPayload(BaseModel):
+    id:str
+    name:str
+    exp : int
+
+
+async def authenticateUser(req:Request):
+    token = req.cookies.get("archit_auth")
+    if not token:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"finvalid credentials."})
+    try:
+        payload_dict= jwt.decode(token,os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        decoded_payload: TokenPayload = TokenPayload(**payload_dict)
+        return decoded_payload
+    except jwt.ExpiredSignatureError:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"credentials expired"})
+    except jwt.InvalidTokenError:
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"invalid credentials.."})
+    except jwt.PyJWTError as e:
+        print(e)
+        return responses.JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED,content={"message":"invalid credentials..."})
+
+
+
+from models.document import Doc
+
+class GutenBurg:
+     def cleanHeaderFooter(self,doc:str):
+        start = doc.find("START OF THE PROJECT GUTENBERG EBOOK")
+        end = doc.find("END OF THE PROJECT GUTENBERG EBOOK")
+        for i in range(start,start+120,1):
+            if(doc[i] == '\n') :
+                start = i 
+                break
+        for i in range(end,0,-1):
+            if(doc[i] == '\n') :
+                end = i 
+                break
+    
+        return  doc[start if start != -1 else 0:end if end != -1 else len(doc)]import uuid
+from chonkie import SemanticChunker
+import aiohttp
+from models.document import Doc
+from pydantic import BaseModel,Field,HttpUrl
+from utils.processDoc import GutenBurg
+from qdrant_client import models as mod
+
+class BookUrl(BaseModel):
+    url : HttpUrl = Field(...)
+
+
+async def DownloadContent(body:BookUrl)->bool:
+    try :
+        doc = await Doc.find_one(Doc.index==str(body.url))
+        
+        if doc: 
+            return True
+        lib = GutenBurg()
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(str(body.url)) as response:
+                if not response.ok:
+                    return False
+                content =  await response.text(encoding="utf-8")
+                title = content[content.find("Title:")+6:content.find("Author:")-1].strip()
+                content = lib.cleanHeaderFooter(content)
+                size = response.headers.get("Content-Length")
+                size = int(size) / 1024**2 if size else -1
+                
+                new_doc = Doc(content=content,title=title,size=size,index=str(body.url))
+                await new_doc.insert()
+                return True
+    except Exception as e:
+            print(str(e))
+            return False
+    
+
+
+
+
+
+
+async def saveChunks(models):
+    docs =await Doc.find(Doc.is_embedded==False).to_list()
+    models["chunker"] = SemanticChunker( 
+        embedding_model="minishlab/potion-base-32M",       
+        threshold=0.4,
+        similarity_window=3, 
+        min_sentences_per_chunk=3,
+        min_characters_per_sentence=40,
+        chunk_size=512
+        )
+
+    for doc in docs:
+        chunks = models["chunker"].chunk(doc.content)
+        docList = [c.text for c in chunks]
+        embeddings =models["embedder"].encode(docList)
+
+        await models["qd_client"].upsert(
+            collection_name="books",
+            points=[
+                mod.PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector={
+                        "bm25": mod.Document(text=c.text,model="Qdrant/bm25"),   
+                        "dense": embeddings[i].tolist(),
+                    },
+                    payload={
+                        "m_id": str(doc.id),
+                        "title" : str(doc.title),
+                        "text": c.text,
+                        "token_count": c.token_count,
+                    }
+                )
+                for i, c in enumerate(chunks)
+            ]
+        )
+
+        doc.content = ""
+        doc.is_embedded = True
+        await doc.save()
+        
+
+
+

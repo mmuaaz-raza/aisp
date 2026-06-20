@@ -26,7 +26,8 @@ async def load_data():
 
 def hybridSearch(semantic_results,lexical_results,alpha=0.5,k=5):
     results: List[tuple[int,float]] = [(0, 0) for _ in range(len(semantic_results))]
-
+    # semantic_results and lexical_results are both unsorted, 
+    # indexed 0..n-1 matching corpus order
     for i , lr in lexical_results :
         results[i] = (i,alpha*lr+ (1-alpha)*semantic_results[i][1])
 
@@ -55,7 +56,7 @@ async def main():
             if(query.strip() == 'x'):
                 break
             elif query.lower() in cache:
-                results = cache[query.lower()]
+                response = cache[query.lower()]
             else:  
                     target_embedding = Embbed([query],transformer)
                     if target_embedding is None:
@@ -66,9 +67,8 @@ async def main():
                     results = hybridSearch(results_s,results_l,0.2,10)
                     results = CrossEncode(encoder,[(data[i],i) for i,_ in results],query)
                     response = Respond(query,[data[i] for i,_ in results])
-                    print(f"---------RESULT---------\n{response}")
                     cache[query.lower()] = response
-
+            print(f"---------RESULT---------\n{response}")
     except Exception as e:
         print(e)
     

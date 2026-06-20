@@ -16,7 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+@app.get("/ping")
+async def ping():
+    return {"status": "alive"}
 app.include_router(query.router,prefix="/api/v1")
 app.include_router(docs.router ,prefix="/api/v1")
 app.include_router(auth.router ,prefix="/api/v1")
