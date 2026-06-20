@@ -20,9 +20,9 @@ async def setup(app: FastAPI):
     load_dotenv()
     client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
     try:
-        models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"))
+        models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"),api_key=os.getenv("QdrantAPIKEY"))
         if not await models["qd_client"].collection_exists("books"):
-            
+
             await models["qd_client"].create_collection(
                 collection_name="books",
                 vectors_config={
