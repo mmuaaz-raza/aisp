@@ -12,12 +12,26 @@ from models.chat import Chat
 from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier ,PayloadSchemaType
+import httpx
+import asyncio
 models = {}
+
+async def keep_alive():
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                res = await client.get(os.getenv("SERVER_URI")or"", timeout=10)
+                print(f"[keep-alive] ping → {res.status_code}")
+            except Exception as e:
+                print(f"[keep-alive] ping failed: {e}")
+            await asyncio.sleep(5*60)
+
 @asynccontextmanager
 async def setup(app: FastAPI):
     load_dotenv()
     print("==> Starting setup...")
     client = AsyncMongoClient(os.getenv("MONGODBURI"), serverSelectionTimeoutMS=5000)
+    task = asyncio.create_task(keep_alive())
     try:
         print("==> Connecting to Qdrant...")
         models["qd_client"] = AsyncQdrantClient(url=os.getenv("QdrantURI"),api_key=os.getenv("QdrantAPIKEY"))
@@ -67,6 +81,12 @@ async def setup(app: FastAPI):
 
     yield
 
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    
     await client.close()
     if "llm" in models:
         models["llm"].close()
