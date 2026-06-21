@@ -30,6 +30,7 @@ aiofiles==25.1.0
 
 # Pydantic
 pydantic==2.13.4
+pydantic[email]==2.13.4
 pydantic-settings==2.14.2
 
 # Utils
