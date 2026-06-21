@@ -42,6 +42,13 @@ export default function ChatConversationPage({
   const [loading, setLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
+
   const [bookPickerOpen, setBookPickerOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
@@ -305,7 +312,7 @@ export default function ChatConversationPage({
 
   // ── Main UI ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen bg-[var(--bg)]">
+    <div className="flex flex-col h-[100dvh] bg-[var(--bg)]">
       {/* ── Top Header ── */}
       <Header
         isLoggedIn={auth.isLoggedIn}

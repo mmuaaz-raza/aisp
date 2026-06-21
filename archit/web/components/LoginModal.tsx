@@ -99,7 +99,7 @@ export default function LoginModal({ open, onClose, auth }: LoginModalProps) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden"
+          className="w-full max-w-sm max-h-[95dvh] overflow-y-auto rounded-2xl border shadow-2xl"
           style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         >
           {/* Header */}
