@@ -61,7 +61,7 @@ async def GenerateAuthToken(user,message="Registered successfully"):
         value=jwt_token,
         max_age=60 * 60 * 24 * 7,
         httponly=True,
-        secure=False,
+        secure=True,
         samesite="none" 
     )
     return response_obj
