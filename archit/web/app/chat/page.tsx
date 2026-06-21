@@ -82,6 +82,7 @@ export default function NewChatPage() {
         query,
         chat_id: chatId,
         is_entire_corpus: mode === "library",
+        is_history: mode === "history",
         tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
       };
       const queryRes = await fetch(`${BACKEND_URL}/api/v1/chats/c`, {

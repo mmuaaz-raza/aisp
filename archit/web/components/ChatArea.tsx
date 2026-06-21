@@ -43,8 +43,19 @@ export default function ChatArea({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Auto-scroll intentionally disabled so the view stays at the same level
-  }, [messages, streamingContent]);
+    // Auto-scroll when the user sends a message, but not when assistant response is rendering
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === "user" && scrollRef.current) {
+        // Use setTimeout to ensure the DOM has updated with the new message
+        setTimeout(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, 10);
+      }
+    }
+  }, [messages]);
 
   const isEmpty = messages.length === 0;
 

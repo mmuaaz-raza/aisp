@@ -38,6 +38,7 @@ export interface SearchRequest {
   query: string;
   chat_id: string;      // PydanticObjectId
   is_entire_corpus?: boolean;
+  is_history?: boolean;
   tags?: string[];      // Tag-based book selection (sent instead of individual ids)
 }
 

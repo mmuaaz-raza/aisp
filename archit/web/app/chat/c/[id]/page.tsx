@@ -134,6 +134,7 @@ export default function ChatConversationPage({
       query,
       chat_id: chatId,
       is_entire_corpus: mode === "library",
+      is_history: mode === "history",
       tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
     };
 
