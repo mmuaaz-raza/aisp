@@ -22,6 +22,7 @@ class SearchRequest(BaseModel):
     chat_id : PydanticObjectId 
     tags : List[str] = []
     is_entire_corpus : bool = False
+    is_history : bool  = False
 
 class RelevantDocumets(BaseModel):
     token : int
@@ -29,7 +30,7 @@ class RelevantDocumets(BaseModel):
     title : str
 
 
-def generatePrompt(query:str,documents:List[RelevantDocumets]):
+def generatePrompt(query:str,documents:List[RelevantDocumets],isHistory:bool):
     context_text = ""
     for idx,e in enumerate(documents) :
         context_text += f"\n--- Excerpt {idx + 1} ---\n"
@@ -38,9 +39,10 @@ def generatePrompt(query:str,documents:List[RelevantDocumets]):
         context_text += f"Tokens (current chunk): {str(e.token)}\n"
 
     prompt = f"""
+    <mode>{"history" if isHistory else "context"} </mode>
 
     <context>
-    {context_text}
+    { context_text}
     </context>
 
     <query> {query} </query>
@@ -75,13 +77,13 @@ async def SearchBook(user: Annotated[TokenPayload,Depends(authenticateUser)], re
 
         Responses = []
         extracted_ids = [str(id) for id in req.ids]
-
+        
         if len(req.tags):
             docs = await Doc.find({"tags":{"$in":req.tags}}).to_list()
             extracted_ids = [str(doc.id) for doc in docs]
 
         embedded_query = await asyncio.to_thread(models["embedder"].encode,req.query)
-        if len(req.ids) or  req.is_entire_corpus:
+        if not req.is_history:
             search_results = await models["qd_client"].query_points(
                                         collection_name="books",
                                         prefetch=[
@@ -113,7 +115,7 @@ async def SearchBook(user: Annotated[TokenPayload,Depends(authenticateUser)], re
                     title = str(point.payload.get("title", "N/A"))
                     Responses.append(RelevantDocumets(text=point.payload["text"],title=title,token=point.payload["token_count"]))
 
-        prompt = generatePrompt(req.query,Responses)
+        prompt = generatePrompt(req.query,Responses,req.is_history)
         current_chat.tokens_used += int(len(prompt)/4 + 20)
 
         if(current_chat.tokens_used + 120 >= current_chat.token_limit) :

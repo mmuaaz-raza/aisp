@@ -11,7 +11,7 @@ from models.document import Doc
 from models.chat import Chat
 from dotenv import load_dotenv
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier
+from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifier ,PayloadSchemaType
 models = {}
 @asynccontextmanager
 async def setup(app: FastAPI):
@@ -34,7 +34,14 @@ async def setup(app: FastAPI):
                     ) 
                 },
                 on_disk_payload=True,
+
             )
+                
+        await models["qd_client"].create_payload_index(
+            collection_name="books",
+        field_name="m_id",
+        field_schema=PayloadSchemaType.KEYWORD,
+        )
         print("==> Qdrant ready")
 
         print("==> Loading embedder...")
