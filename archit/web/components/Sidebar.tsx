@@ -74,6 +74,8 @@ interface SidebarProps {
 
 
 
+let cachedChats: ChatListItem[] | null = null;
+
 export default function Sidebar({
   activeChatId,
   collapsed,
@@ -83,7 +85,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const { theme, toggle } = useTheme();
   const router = useRouter();
-  const [chats, setChats] = useState<ChatListItem[]>([]);
+  const [chats, setChats] = useState<ChatListItem[]>(cachedChats || []);
+  const [isLoadingChats, setIsLoadingChats] = useState(!cachedChats && isLoggedIn);
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const pendingChat = chats.find((c) => c.id === pendingDeleteId) ?? null;
@@ -93,15 +96,33 @@ export default function Sidebar({
 
   // Fetch chat list from backend
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn) {
+      cachedChats = null;
+      setChats([]);
+      setIsLoadingChats(false);
+      return;
+    }
+    if (!cachedChats) {
+      setIsLoadingChats(true);
+    }
     const controller = new AbortController();
     fetch(`${BACKEND_URL}/api/v1/chats`, {
       credentials: "include",
       signal: controller.signal,
     })
       .then((r) => (r.ok ? r.json() : []))
-      .then((data: ChatListItem[]) => setChats(Array.isArray(data) ? data : []))
-      .catch((err) => { if (err.name !== "AbortError") setChats([]); });
+      .then((data: ChatListItem[]) => {
+        const parsed = Array.isArray(data) ? data : [];
+        cachedChats = parsed;
+        setChats(parsed);
+        setIsLoadingChats(false);
+      })
+      .catch((err) => { 
+        if (err.name !== "AbortError") {
+          setChats([]);
+          setIsLoadingChats(false);
+        }
+      });
     return () => controller.abort();
   }, [isLoggedIn, refreshKey]); // refreshKey is only bumped after create/delete
 
@@ -321,6 +342,24 @@ export default function Sidebar({
                   Sign in
                 </button>
               </div>
+            </div>
+          ) : isLoadingChats ? (
+            <div className="flex flex-col gap-2 opacity-60">
+              {[80, 60, 72, 55, 68].map((w, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-2 py-2 rounded-lg"
+                >
+                  <div
+                    className="w-3 h-3 rounded shrink-0 animate-pulse"
+                    style={{ background: "var(--border)" }}
+                  />
+                  <div
+                    className="h-2.5 rounded animate-pulse"
+                    style={{ background: "var(--border)", width: `${w}%` }}
+                  />
+                </div>
+              ))}
             </div>
           ) : chats.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-center px-4">
