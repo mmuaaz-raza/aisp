@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 
 // Relative path — proxied to http://localhost:8000 via next.config.ts rewrites.
 // This keeps all requests same-origin so browser cookies are sent automatically.
-const BACKEND = "/api/v1";
+const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+const BACKEND = `${BACKEND_URL}/api/v1`;
 
 export interface AuthUser {
   id: string;

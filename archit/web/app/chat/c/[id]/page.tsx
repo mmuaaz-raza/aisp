@@ -13,6 +13,8 @@ import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/lib/useAuth";
 import { Sparkles } from "lucide-react";
 
+const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -55,7 +57,7 @@ export default function ChatConversationPage({
     const controller = new AbortController();
     async function fetchChat() {
       try {
-        const res = await fetch(`/api/v1/chats/${chatId}`, {
+        const res = await fetch(`${BACKEND_URL}/api/v1/chats/${chatId}`, {
           credentials: "include",
           signal: controller.signal,
         });
@@ -136,7 +138,7 @@ export default function ChatConversationPage({
     };
 
     try {
-      const res = await fetch("/api/v1/chats/c", {
+      const res = await fetch(`${BACKEND_URL}/api/v1/chats/c`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -186,7 +188,7 @@ export default function ChatConversationPage({
     if (summarizing || !chat) return;
     setSummarizing(true);
     try {
-      const res = await fetch(`/api/v1/chats/summary/${chatId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/v1/chats/summary/${chatId}`, {
         method: "POST",
         credentials: "include",
       });

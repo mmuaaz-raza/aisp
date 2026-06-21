@@ -13,8 +13,9 @@ import {
   Moon,
   Lock,
   LogIn,
-  Trash2,
 } from "lucide-react";
+
+const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
 
 /** Shape returned by GET /api/v1/chats (messages excluded) */
 interface ChatListItem {
@@ -93,7 +94,7 @@ export default function Sidebar({
   useEffect(() => {
     if (!isLoggedIn) return;
     const controller = new AbortController();
-    fetch("/api/v1/chats", {
+    fetch(`${BACKEND_URL}/api/v1/chats`, {
       credentials: "include",
       signal: controller.signal,
     })
@@ -123,7 +124,7 @@ export default function Sidebar({
     setChats((prev) => prev.filter((c) => c.id !== chatId));
     if (chatId === activeChatId) router.push("/chat");
     try {
-      await fetch(`/api/v1/chats/${chatId}`, {
+      await fetch(`${BACKEND_URL}/api/v1/chats/${chatId}`, {
         method: "DELETE",
         credentials: "include",
       });

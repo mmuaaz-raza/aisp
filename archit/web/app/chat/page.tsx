@@ -13,6 +13,8 @@ import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/lib/useAuth";
 import { Sparkles } from "lucide-react";
 
+const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+
 export default function NewChatPage() {
   const auth = useAuth();
   const router = useRouter();
@@ -64,7 +66,7 @@ export default function NewChatPage() {
 
     try {
       // 1. Create a new chat
-      const chatRes = await fetch("/api/v1/chats", {
+      const chatRes = await fetch(`${BACKEND_URL}/api/v1/chats`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -82,7 +84,7 @@ export default function NewChatPage() {
         is_entire_corpus: mode === "library",
         tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
       };
-      const queryRes = await fetch("/api/v1/chats/c", {
+      const queryRes = await fetch(`${BACKEND_URL}/api/v1/chats/c`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

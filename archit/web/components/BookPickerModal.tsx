@@ -5,6 +5,8 @@ import { Book } from "@/lib/types";
 import BookCard from "./BookCard";
 import { X, Search, BookOpen, Check, ChevronDown, Loader2, Tag } from "lucide-react";
 
+const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+
 const PAGE_LIMIT = 20;
 
 interface BookPickerModalProps {
@@ -52,7 +54,7 @@ export default function BookPickerModal({
         if (q.trim()) params.set("name", q.trim());
         tags.forEach((t) => params.append("tags", t));
 
-        const res = await fetch(`/api/v1/books?${params}`, {
+        const res = await fetch(`${BACKEND_URL}/api/v1/books?${params}`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -84,7 +86,7 @@ export default function BookPickerModal({
     if (!open) return;
     setTimeout(() => searchRef.current?.focus(), 80);
     // Fetch all available tags
-    fetch("/api/v1/books/tags", { credentials: "include" })
+    fetch(`${BACKEND_URL}/api/v1/books/tags`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { tags: [] }))
       .then((data) => {
         const tagsArray = Array.isArray(data?.tags) ? data.tags : Array.isArray(data) ? data : [];
