@@ -265,14 +265,16 @@ export default function ChatConversationPage({
           </p>
           <p className="text-xs text-[var(--text-muted)]">{fetchError}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              window.location.href = "/chat";
+            }}
             className="text-xs font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-80 cursor-pointer"
             style={{
               background: "var(--accent)",
               color: "var(--user-bubble-text)",
             }}
           >
-            Retry
+            Go to Home
           </button>
         </div>
       </div>

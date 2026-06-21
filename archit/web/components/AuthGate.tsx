@@ -67,10 +67,11 @@ export default function AuthGate({ auth }: AuthGateProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError("");
+    let ok = false;
     
     if (tab === "login") {
       if (!identifier.trim() || !password) return;
-      await auth.login(identifier.trim(), password);
+      ok = await auth.login(identifier.trim(), password);
     } else {
       const n = name.trim();
       const eMail = email.trim();
@@ -97,7 +98,11 @@ export default function AuthGate({ auth }: AuthGateProps) {
         return;
       }
 
-      await auth.register(n, eMail, password);
+      ok = await auth.register(n, eMail, password);
+    }
+    
+    if (ok) {
+      window.location.href = "/chat";
     }
   };
 

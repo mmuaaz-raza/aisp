@@ -64,7 +64,10 @@ export default function LoginModal({ open, onClose, auth }: LoginModalProps) {
       if (!name.trim() || !email.trim() || !password) return;
       ok = await auth.register(name.trim(), email.trim(), password);
     }
-    if (ok) onClose();
+    if (ok) {
+      onClose();
+      window.location.href = "/chat";
+    }
   };
 
   if (!open) return null;
@@ -97,11 +100,12 @@ export default function LoginModal({ open, onClose, auth }: LoginModalProps) {
       />
 
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="w-full max-w-sm max-h-[95dvh] overflow-y-auto rounded-2xl border shadow-2xl"
-          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-        >
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div
+            className="w-full max-w-sm rounded-2xl border shadow-2xl"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4">
             <div>
@@ -290,6 +294,7 @@ export default function LoginModal({ open, onClose, auth }: LoginModalProps) {
                 : "Create account"}
             </button>
           </form>
+          </div>
         </div>
       </div>
     </>
