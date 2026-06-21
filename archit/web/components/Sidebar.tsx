@@ -13,6 +13,7 @@ import {
   Moon,
   Lock,
   LogIn,
+  Trash2,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
