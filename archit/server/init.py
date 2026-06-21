@@ -54,7 +54,9 @@ async def setup(app: FastAPI):
 
     except Exception as e:
         print(f"==> ERROR: {e}")
-        raise e
+        models["startup_error"] = str(e)
+
+        # raise e
 
     yield
 

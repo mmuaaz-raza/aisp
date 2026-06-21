@@ -1,5 +1,5 @@
 from fastapi import FastAPI 
-from init import setup
+from init import setup,models
 from routes import docs
 from routes import query
 from routes import chat
@@ -18,7 +18,10 @@ app.add_middleware(
 
 @app.get("/ping")
 async def ping():
+    if "startup_error" in models:
+        return {"status": "degraded", "error": models["startup_error"]}
     return {"status": "alive"}
+
 app.include_router(query.router,prefix="/api/v1")
 app.include_router(docs.router ,prefix="/api/v1")
 app.include_router(auth.router ,prefix="/api/v1")
