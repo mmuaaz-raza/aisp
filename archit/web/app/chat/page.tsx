@@ -83,24 +83,15 @@ export default function NewChatPage() {
       const chat = await chatRes.json();
       const chatId: string = chat.id;
 
-      // 2. Send the first query
-      const payload: SearchRequest = {
-        ids: mode === "library" ? [] : selectedBookIds,
-        query,
-        chat_id: chatId,
-        is_entire_corpus: mode === "library",
-        tags: mode === "library" ? [] : selectedQueryTags,
-      };
-      const queryRes = await fetch(`${BACKEND_URL}/api/v1/chats/c`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-      if (!queryRes.ok) throw new Error(`Query failed (${queryRes.status})`);
+      // 2. Navigate immediately to the chat page, passing the query via URL so the new page can handle it
+      const searchParams = new URLSearchParams();
+      searchParams.set("q", query);
+      searchParams.set("m", mode);
+      if (selectedBookIds.length > 0) searchParams.set("b", selectedBookIds.join(","));
+      if (selectedQueryTags.length > 0) searchParams.set("t", selectedQueryTags.join(","));
+      searchParams.set("new", "true");
 
-      // 3. Navigate to the chat page — it will fetch the saved messages from the backend
-      router.push(`/chat/c/${chatId}`);
+      router.push(`/chat/c/${chatId}?${searchParams.toString()}`);
     } catch (err) {
       console.error(err);
       setLoading(false);

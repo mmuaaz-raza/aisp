@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, use } from "react";
+import { useState, useCallback, useEffect, use, useRef } from "react";
 import { Message, Book, ChatSession, SearchRequest } from "@/lib/types";
 import { QueryMode } from "@/components/ChatInput";
 import Sidebar from "@/components/Sidebar";
@@ -38,6 +38,27 @@ export default function ChatConversationPage({
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [chat, setChat] = useState<ChatSession | null>(null);
+
+  // Initialize new chat on client to avoid SSR mismatch
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get("new") === "true") {
+        setChat({ 
+          id: chatId, 
+          title: "New Chat", 
+          messages: [],
+          summary: "",
+          token_limit: 8000,
+          tokens_used: 0,
+          is_exhausted: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          selectedBookIds: []
+        });
+      }
+    }
+  }, [chatId]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -52,17 +73,44 @@ export default function ChatConversationPage({
   const [bookPickerOpen, setBookPickerOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [bookRegistry, setBookRegistry] = useState<Record<string, Book>>({});
-  const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-  const [selectedQueryTags, setSelectedQueryTags] = useState<string[]>([]);
-  const [mode, setMode] = useState<QueryMode>("library");
+  
+  const [selectedBookIds, setSelectedBookIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const b = new URLSearchParams(window.location.search).get("b");
+      if (b) return b.split(",").filter(Boolean);
+    }
+    return [];
+  });
+  
+  const [selectedQueryTags, setSelectedQueryTags] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const t = new URLSearchParams(window.location.search).get("t");
+      if (t) return t.split(",").filter(Boolean);
+    }
+    return [];
+  });
+  
+  const [mode, setMode] = useState<QueryMode>(() => {
+    if (typeof window !== "undefined") {
+      const m = new URLSearchParams(window.location.search).get("m");
+      if (m === "books" || m === "library") return m;
+    }
+    return "library";
+  });
+  
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const initialQueryHandled = useRef(false);
 
   // ── Fetch chat on mount ───────────────────────────────────────────────────
   useEffect(() => {
     const controller = new AbortController();
     async function fetchChat() {
+      // Skip fetching if this is a newly created chat from the redirect
+      if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "true") {
+        return;
+      }
       try {
         const res = await fetch(`${BACKEND_URL}/api/v1/chats/${chatId}`, {
           credentials: "include",
@@ -118,11 +166,11 @@ export default function ChatConversationPage({
     });
   }, []);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || loading || !chat) return;
+  const handleSend = async (overrideQuery?: string, overrideMode?: QueryMode, overrideBooks?: string[], overrideTags?: string[]) => {
+    const query = (overrideQuery ?? inputValue).trim();
+    if (!query || loading || !chat) return;
 
-    const query = inputValue.trim();
-    setInputValue("");
+    if (!overrideQuery) setInputValue("");
 
     // Optimistically add user message to UI
     const optimisticUser: Message = {
@@ -136,12 +184,16 @@ export default function ChatConversationPage({
 
     setLoading(true);
 
+    const activeMode = overrideMode ?? mode;
+    const activeBooks = overrideBooks ?? selectedBookIds;
+    const activeTags = overrideTags ?? selectedQueryTags;
+
     const payload: SearchRequest = {
-      ids: mode === "library" ? [] : selectedBookIds,
+      ids: activeMode === "library" ? [] : activeBooks,
       query,
       chat_id: chatId,
-      is_entire_corpus: mode === "library",
-      tags: mode === "library" ? [] : selectedQueryTags,
+      is_entire_corpus: activeMode === "library",
+      tags: activeMode === "library" ? [] : activeTags,
     };
 
     try {
@@ -190,6 +242,26 @@ export default function ChatConversationPage({
       setLoading(false);
     }
   };
+
+  // ── Handle initial query from URL ─────────────────────────────────────────
+  useEffect(() => {
+    if (chat && typeof window !== "undefined" && !initialQueryHandled.current) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const q = searchParams.get("q");
+      if (q && searchParams.get("new") === "true") {
+        initialQueryHandled.current = true;
+        // Clean up URL
+        window.history.replaceState(null, "", window.location.pathname);
+        
+        // Trigger send
+        const m = (searchParams.get("m") as QueryMode) || "library";
+        const b = searchParams.get("b") ? searchParams.get("b")!.split(",") : [];
+        const t = searchParams.get("t") ? searchParams.get("t")!.split(",") : [];
+        
+        handleSend(q, m, b, t);
+      }
+    }
+  }, [chat, handleSend]);
 
   const handleSummarize = async () => {
     if (summarizing || !chat) return;
@@ -347,7 +419,7 @@ export default function ChatConversationPage({
           selectedQueryTags={selectedQueryTags}
           inputValue={inputValue}
           onInputChange={setInputValue}
-          onSend={handleSend}
+          onSend={() => handleSend()}
           onOpenBookPicker={() => setBookPickerOpen(true)}
           mode={mode}
           onModeChange={setMode}
