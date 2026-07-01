@@ -39,6 +39,61 @@ function parseUserQuery(content: string): string {
   return match ? match[1].trim() : content;
 }
 
+function processTextWithCitations(text: string) {
+  const citations: string[] = [];
+  const processedText = text.replace(/<cite>(.*?)<\/cite>/gi, (match, title) => {
+    let index = citations.indexOf(title);
+    if (index === -1) {
+      citations.push(title);
+      index = citations.length - 1;
+    }
+    return `[${index + 1}](#cite:${encodeURIComponent(title)})`;
+  });
+  return { processedText, citations };
+}
+
+const markdownComponents = {
+  a: ({ href, children, ...props }: any) => {
+    if (href?.startsWith("#cite:")) {
+      const title = decodeURIComponent(href.slice(6));
+      return (
+        <sup 
+          className="ml-0.5 cursor-help text-[var(--accent)] hover:underline font-semibold" 
+          title={title}
+        >
+          <span className="text-xs">[{children}]</span>
+        </sup>
+      );
+    }
+    return <a href={href} {...props} className="text-[var(--accent)] hover:underline" />;
+  }
+};
+
+function MarkdownWithCitations({ text }: { text: string }) {
+  const { processedText, citations } = processTextWithCitations(text);
+  
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="prose max-w-none">
+        <ReactMarkdown components={markdownComponents}>{processedText}</ReactMarkdown>
+      </div>
+      
+      {citations.length > 0 && (
+        <div className="mt-2 pt-3 border-t border-[var(--border)] text-xs text-[var(--text-muted)] w-full">
+          <div className="font-semibold mb-1.5 text-[var(--text-primary)]">References</div>
+          <ol className="list-decimal list-inside space-y-1">
+            {citations.map((cite, i) => (
+              <li key={i}>
+                <span className="italic">{cite}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TypewriterLines({ text }: { text: string }) {
   const lines = text.split("\n");
   const [visibleLines, setVisibleLines] = useState(1);
@@ -52,7 +107,7 @@ function TypewriterLines({ text }: { text: string }) {
     }
   }, [visibleLines, lines.length]);
 
-  return <ReactMarkdown>{lines.slice(0, visibleLines).join("\n")}</ReactMarkdown>;
+  return <MarkdownWithCitations text={lines.slice(0, visibleLines).join("\n")} />;
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
@@ -85,7 +140,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       <div className="flex justify-end group px-4 py-1 animate-message">
         <div className="flex flex-col items-end gap-0.5 max-w-[75%]">
           <div
-            className="text-sm px-4 py-2.5 rounded-2xl rounded-br-sm leading-relaxed shadow-sm"
+            className="text-base px-4 py-2.5 rounded-2xl rounded-br-sm leading-relaxed shadow-sm"
             style={{
               background: "var(--user-bubble)",
               color: "var(--user-bubble-text)",
@@ -103,15 +158,14 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div className="flex justify-start group px-4 py-1 animate-message">
-      <div className="flex items-end gap-2 max-w-[80%]">
-        <img src="/favicon-bg/favicon.svg" alt="Archit Avatar" width={28} height={28} className="rounded-full shrink-0 self-start mt-1 border border-[var(--border)]" />
+      <div className="flex items-end gap-2 max-w-[95%]">
         <div className="flex flex-col gap-1 w-full">
-          <div className="text-sm text-[var(--text-primary)] leading-relaxed">
-            <div className="prose">
+          <div className="text-base text-[var(--text-primary)] leading-relaxed">
+            <div className="w-full">
               {message.isNew ? (
                 <TypewriterLines text={message.content} />
               ) : (
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                <MarkdownWithCitations text={message.content} />
               )}
             </div>
           </div>

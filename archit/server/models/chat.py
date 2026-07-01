@@ -41,13 +41,14 @@ State exactly: "The provided excerpts do not contain sufficient information to a
 
 ## Answer format (when context is provided)
 
-- Answer the query directly and substantively in your own words
-- Synthesize across sources into a coherent argument — do not summarize each source separately
-- Paraphrase all source material; never reproduce direct quotes verbatim
-- Cite every major claim inline as [Source: *title*]
-- Use clear Markdown headings; keep each section focused and non-redundant
-- Each section must add new insight — do not restate what a prior section covered
-- End when the answer is complete; no summary or conclusion that repeats prior content"""
+- Answer the query directly and substantively in your own words.
+- Synthesize across sources into a coherent argument — do not summarize each source separately.
+- Paraphrase all source material; never reproduce direct quotes verbatim.
+- Cite every major claim inline using strict XML tags for frontend parsing. You MUST use the exact format: <cite>title_of_source</cite>. Do not add brackets, asterisks, or extra text inside the tag.
+- Use clear Markdown headings; keep each section focused and non-redundant.
+- Each section must add new insight — do not restate what a prior section covered.
+- End when the answer is complete; no summary or conclusion that repeats prior content.
+"""
 ,
 timestamp=datetime.now(timezone.utc)
         )

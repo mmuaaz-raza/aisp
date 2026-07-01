@@ -62,9 +62,9 @@ export default function ChatArea({
   return (
     <div className="flex flex-col flex-1 min-w-0 h-full bg-[var(--bg)]">
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-0.5">
-        {isEmpty && (
-          <div className="flex flex-col items-center justify-center h-full gap-6 px-8 text-center">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 px-4 sm:px-0">
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-full gap-6 px-8 text-center w-full max-w-4xl mx-auto">
             <img src="/favicon-bg/favicon.svg" alt="Logo" width={48} height={48} className="rounded-2xl shadow-sm" />
             <div className="flex flex-col items-center">
               <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight text-center">
@@ -122,11 +122,11 @@ export default function ChatArea({
               </div>
             )}
           </div>
-        )}
-
-        {messages.map((msg, idx) => (
-          <MessageBubble key={`${msg.role}-${msg.timestamp}-${idx}`} message={msg} />
-        ))}
+        ) : (
+          <div className="w-full max-w-4xl mx-auto space-y-6 pb-4 flex flex-col">
+            {messages.map((msg, idx) => (
+              <MessageBubble key={`${msg.role}-${msg.timestamp}-${idx}`} message={msg} />
+            ))}
 
         {/* Live streaming */}
         {loading && streamingContent && (
@@ -174,10 +174,13 @@ export default function ChatArea({
             </div>
           </div>
         )}
+          </div>
+        )}
       </div>
 
       {/* Input */}
-      <ChatInput
+      <div className="w-full max-w-4xl mx-auto pb-2">
+        <ChatInput
         value={inputValue}
         onChange={onInputChange}
         onSend={onSend}
@@ -186,9 +189,10 @@ export default function ChatArea({
         selectedBookCount={selectedBooks.length}
         selectedBookTitles={selectedBooks.map((b) => b.title)}
         selectedQueryTags={selectedQueryTags}
-        mode={mode}
-        onModeChange={onModeChange}
-      />
+          mode={mode}
+          onModeChange={onModeChange}
+        />
+      </div>
     </div>
   );
 }

@@ -85,12 +85,11 @@ export default function NewChatPage() {
 
       // 2. Send the first query
       const payload: SearchRequest = {
-        ids: mode === "history" || mode === "library" ? [] : selectedBookIds,
+        ids: mode === "library" ? [] : selectedBookIds,
         query,
         chat_id: chatId,
         is_entire_corpus: mode === "library",
-        is_history: mode === "history",
-        tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
+        tags: mode === "library" ? [] : selectedQueryTags,
       };
       const queryRes = await fetch(`${BACKEND_URL}/api/v1/chats/c`, {
         method: "POST",

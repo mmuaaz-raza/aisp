@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+from scripts.query import workflow
+from langchain_groq import ChatGroq
 from groq import Groq
 from models.user import User
 from sentence_transformers import SentenceTransformer
@@ -25,6 +27,7 @@ async def keep_alive():
             except Exception as e:
                 print(f"[keep-alive] ping failed: {e}")
             await asyncio.sleep(5*60)
+
 
 @asynccontextmanager
 async def setup(app: FastAPI):
@@ -71,9 +74,15 @@ async def setup(app: FastAPI):
         print("==> Beanie ready")
 
         models["llm"] = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        print("==> LLM ready. Setup complete!")
+        models["llm2"] = ChatGroq(model="llama-3.1-8b-instant",temperature=0.3)
+        print("==> LLMs ready")
+
+        models.setdefault("graph", {})["query"] = workflow.compile()
+        print("==> Graphs ready. Setup complete!")
+
 
     except Exception as e:
+        print(e)
         print(f"==> ERROR: {e}")
         models["startup_error"] = str(e)
 

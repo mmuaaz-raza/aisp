@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from "react";
-import { ArrowUp, BookOpen, MessageSquare, Library } from "lucide-react";
+import { ArrowUp, BookOpen, Library } from "lucide-react";
 
-export type QueryMode = "books" | "history" | "library";
+export type QueryMode = "books" | "library";
 
 interface ChatInputProps {
   value: string;
@@ -71,9 +71,7 @@ export default function ChatInput({
   }
 
   const placeholder =
-    mode === "history"
-      ? "Ask based on this conversation's history…"
-      : mode === "library"
+    mode === "library"
       ? "Search across the entire library…"
       : (selectedBookCount === 0 && selectedQueryTags.length === 0)
       ? "Select books or topics first…"
@@ -157,29 +155,7 @@ export default function ChatInput({
                 <span className="hidden sm:inline">Books</span>
               </button>
 
-              {/* divider */}
-              <div style={{ width: 1, background: "var(--border)", height: 20 }} />
 
-              <button
-                type="button"
-                onClick={() => onModeChange("history")}
-                title="Answer from chat discussion"
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer"
-                style={
-                  mode === "history"
-                    ? {
-                        background: "var(--accent)",
-                        color: "var(--user-bubble-text)",
-                      }
-                    : {
-                        background: "transparent",
-                        color: "var(--text-muted)",
-                      }
-                }
-              >
-                <MessageSquare size={11} />
-                <span className="hidden sm:inline">Discussion</span>
-              </button>
             </div>
 
             {/* Books picker — only visible in books mode */}

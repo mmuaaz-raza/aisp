@@ -137,12 +137,11 @@ export default function ChatConversationPage({
     setLoading(true);
 
     const payload: SearchRequest = {
-      ids: mode === "history" || mode === "library" ? [] : selectedBookIds,
+      ids: mode === "library" ? [] : selectedBookIds,
       query,
       chat_id: chatId,
       is_entire_corpus: mode === "library",
-      is_history: mode === "history",
-      tags: mode === "history" || mode === "library" ? [] : selectedQueryTags,
+      tags: mode === "library" ? [] : selectedQueryTags,
     };
 
     try {
