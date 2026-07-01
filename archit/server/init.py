@@ -61,8 +61,8 @@ async def setup(app: FastAPI):
         )
         print("==> Qdrant ready")
 
-        print("==> Loading embedder...")
-        models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        # print("==> Loading embedder...")
+        # models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
         print("==> Embedder ready")
 
         print("==> Pinging MongoDB...")
