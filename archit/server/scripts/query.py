@@ -1,4 +1,5 @@
 from pydantic import BaseModel , Field,ConfigDict
+from scripts.embedd import embed_text
 from langgraph.graph import StateGraph,  START, END 
 import asyncio
 from langchain_core.runnables import RunnableConfig
@@ -132,13 +133,13 @@ async def PostClassificationTasks(state:State,config: RunnableConfig):
                 docs = await Doc.find({"tags":{"$in":req.tags}}).to_list()
                 extracted_ids = [str(doc.id) for doc in docs]
 
-        embedded_query = await asyncio.to_thread(config.get("configurable",{}).get("embedder",{}).encode,req.query)
+        embedded_query = await embed_text(req.query)
         if not req.is_history:
                 search_results = await config.get("configurable",{}).get("qd_client",{}).query_points(
                                             collection_name="books",
                                             prefetch=[
                                                 Prefetch(
-                                                    query=embedded_query.tolist(),
+                                                    query=embedded_query,
                                                     using="dense",
                                                     limit=20,
                                                 ),
@@ -191,7 +192,7 @@ async def PostClassificationTasks(state:State,config: RunnableConfig):
         await req.chat.save()
         return {**req.model_dump(),"response":JSONResponse(status_code=status.HTTP_200_OK,content={"response":llm_response})}
 
-    
+     
     except Exception as e:
         print(e)
         return {**req.model_dump(),"error":HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED,detail={"message":"Internal server error"})}

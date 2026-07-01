@@ -55,7 +55,7 @@ async def saveChunks(models):
     for doc in docs:
         chunks = models["chunker"].chunk(doc.content)
         docList = [c.text for c in chunks]
-        embeddings =models["embedder"].encode(docList)
+        embeddings =models["embedder"].encode(docList) #needs to be changed due to cloud model usage
 
         await models["qd_client"].upsert(
             collection_name="books",

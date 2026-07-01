@@ -3,7 +3,6 @@ from scripts.query import workflow
 from langchain_groq import ChatGroq
 from groq import Groq
 from models.user import User
-from sentence_transformers import SentenceTransformer
 from fastapi import FastAPI
 import os
 from beanie import init_beanie
@@ -17,6 +16,7 @@ from qdrant_client.models import VectorParams,Distance,SparseVectorParams,Modifi
 import httpx
 import asyncio
 models = {}
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 async def keep_alive():
     async with httpx.AsyncClient() as client:
@@ -61,10 +61,7 @@ async def setup(app: FastAPI):
         )
         print("==> Qdrant ready")
 
-        # print("==> Loading embedder...")
-        # models["embedder"] = SentenceTransformer("BAAI/bge-small-en-v1.5")
-        print("==> Embedder ready")
-
+        
         print("==> Pinging MongoDB...")
         await client["archit"].command("ping")
         db = client["archit"]
